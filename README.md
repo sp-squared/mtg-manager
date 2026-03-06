@@ -1,6 +1,6 @@
 # mtg-manager
 
-![screenshot](/mtg-manager/img/logo.png)
+![screenshot](/mtg-manager/img/mtg_cards_medium.png)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![WOTC](https://img.shields.io/badge/WOTC-blue.svg)](https://company.wizards.com/en)
