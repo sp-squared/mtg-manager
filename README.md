@@ -40,6 +40,7 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 - Sort by: Newest Import, Name, CMC ↑↓, Rarity, Set
 - Clean URLs — empty parameters stripped from query string
 - Scryfall UUID search for direct card lookup
+- Default sort is Newest Import so freshly imported cards are immediately visible
 
 ### Admin
 - Admin panel for rate limit management (user ID 1 is admin)
@@ -61,13 +62,13 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 
 ## Tech Stack
 
-| Layer      | Technology                        |
-|------------|-----------------------------------|
-| Backend    | PHP 7.4+ (mbstring not required)  |
-| Database   | MySQL 8.0 / MariaDB               |
-| Frontend   | Bootstrap 5, Bootstrap Icons      |
-| Card Data  | Scryfall Bulk Data API            |
-| Server     | Apache (tested on Windows/XAMPP)  |
+| Layer      | Technology                              |
+|------------|-----------------------------------------|
+| Backend    | PHP 7.4+ (mbstring not required)        |
+| Database   | MySQL 8.0+ (recursive CTE required)     |
+| Frontend   | Bootstrap 5, Bootstrap Icons            |
+| Card Data  | Scryfall Bulk Data API                  |
+| Server     | Apache (tested on Windows / Apache 2.4) |
 
 ---
 
@@ -89,13 +90,84 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 | `deck_cards`         | Cards in each deck with sideboard flag       |
 | `deck_exports`       | Shareable immutable deck snapshots           |
 | `daily_cards`        | Card of the Day pile with display dates      |
-| `login_attempts`     | Rate limit audit log with bypass tracking   |
+| `login_attempts`     | Rate limit audit log with bypass tracking    |
 
 ### Notable Design Decisions
 - `user_collection.added_at` — timestamps when a card was first added, enabling "Recently Added" sort
-- `cards.imported_at` — set on first Scryfall import only, enabling "Newest Import" sort; preserved across re-imports
+- `cards.imported_at` — set on first Scryfall import only, enabling "Newest Import" sort; preserved across re-imports via `IFNULL(imported_at, NOW())`
 - `daily_cards` uses a recursive CTE to generate a full date series and backfill any gaps between the earliest record and `CURDATE()`
 - All migrations use `information_schema.COLUMNS` checks wrapped in temporary stored procedures for compatibility with MySQL versions that do not support `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+
+---
+
+## Repository Structure
+
+```
+mtg-manager-repo/               ← GitHub repo root
+├── README.md
+├── LICENSE
+├── .gitignore
+├── database/
+│   └── mtg_schema.sql          ← run this once to set up your database
+│
+└── mtg-manager/                ← drop this entire folder into htdocs/
+    ├── index.php               # login
+    ├── portal.php              # register
+    ├── dashboard.php
+    ├── search.php
+    ├── collection.php
+    ├── wishlist.php
+    ├── decks.php
+    ├── deck_editor.php
+    ├── profile.php
+    ├── import_deck.php
+    ├── style.css
+    │
+    ├── includes/               # shared PHP — not directly browser-accessible
+    │   ├── db_config.template.php   ← copy to db_config.php and fill in credentials
+    │   ├── db_config.php            ← gitignored, you create this
+    │   ├── connect.php
+    │   ├── functions.php
+    │   ├── header.php
+    │   └── footer.php
+    │
+    ├── ajax/                   # JSON endpoints called via fetch()
+    │   ├── add_to_collection.php
+    │   ├── add_to_deck.php
+    │   ├── add_to_wishlist.php
+    │   ├── admin_unlock_action.php
+    │   ├── change_password.php
+    │   ├── check_email.php
+    │   ├── check_username.php
+    │   ├── deck_panels_partial.php
+    │   ├── delete_export.php
+    │   ├── export_deck.php
+    │   ├── remove_from_deck.php
+    │   ├── remove_from_wishlist.php
+    │   ├── toggle_favorite.php
+    │   ├── update_deck_details.php
+    │   ├── update_email.php
+    │   ├── update_username.php
+    │   ├── update_wishlist.php
+    │   └── wishlist_partial.php
+    │
+    ├── actions/                # form POST handlers — redirect after processing
+    │   ├── login.php
+    │   ├── register.php
+    │   ├── logout.php
+    │   ├── add_to_deck.php
+    │   ├── clear_deck.php
+    │   ├── create_deck.php
+    │   ├── delete_deck.php
+    │   ├── do_import_deck.php
+    │   ├── remove_from_collection.php
+    │   ├── update_collection.php
+    │   └── update_deck_card.php
+    │
+    └── admin/                  # admin-only pages (user ID 1 only)
+        ├── import_scryfall.php
+        └── admin_unlock.php
+```
 
 ---
 
@@ -104,120 +176,84 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 ### Requirements
 - PHP 7.4 or higher
 - MySQL 8.0+ (recursive CTE support required)
-- Apache with `mod_rewrite` enabled
+- Apache 2.4+ (tested on Windows)
 - A `cacert.pem` bundle for SSL verification (download from [curl.se](https://curl.se/ca/cacert.pem))
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/mtg-manager.git
-   cd mtg-manager
+   git clone https://github.com/sp-squared/mtg-manager.git
    ```
 
-2. **Create the database config** — copy the template and fill in your credentials:
-   ```bash
-   cp includes/db_config.template.php includes/db_config.php
+2. **Drop the app folder into your htdocs**
    ```
-   Edit `includes/db_config.php`:
+   Copy mtg-manager/ into C:\Apache24\htdocs\
+   ```
+   Your app will be available at `http://localhost/mtg-manager/`
+
+3. **Create your database config** — copy the template and fill in your credentials:
+   ```
+   Copy: mtg-manager\includes\db_config.template.php
+     To: mtg-manager\includes\db_config.php
+   ```
+   Edit `db_config.php`:
    ```php
+   define('APP_BASE', '/mtg-manager'); // must match your htdocs folder name
+
    define('DB_HOST', 'localhost');
    define('DB_USER', 'mtg_collection');
    define('DB_PASS', 'your_password');
    define('DB_NAME', 'mtg_database');
    ```
 
-3. **Run the schema** in MySQL Workbench or CLI:
+4. **Run the schema** in MySQL Workbench or CLI:
    ```bash
    mysql -u root -p < database/mtg_schema.sql
    ```
 
-4. **Enable the MySQL event scheduler** for nightly gap-fill (add to `my.ini`):
+5. **Enable the MySQL event scheduler** so the Card of the Day gap-fill runs at midnight even when no one is logged in. Add to `my.ini` (usually `C:\ProgramData\MySQL\MySQL Server 8.0\my.ini`):
    ```ini
    [mysqld]
    event_scheduler=ON
    ```
-
-5. **Import card data** — log in as admin (user ID 1) and navigate to `import_scryfall.php`. The importer streams Scryfall bulk data with low memory usage and can be re-run safely; existing cards are updated without overwriting their original `imported_at` timestamp.
+   Then restart MySQL:
+   ```
+   net stop MySQL80
+   net start MySQL80
+   ```
 
 6. **Register your account** — the first registered user (ID 1) is automatically the admin.
+
+7. **Import card data** — log in, then navigate to `http://localhost/mtg-manager/admin/import_scryfall.php`. The importer streams Scryfall bulk data with low memory usage and can be re-run safely. After importing, sort Search by "Newest Import" to immediately see what was added.
 
 ---
 
 ## Configuration Notes
 
+### APP_BASE
+`APP_BASE` is defined in `includes/db_config.php` and controls all absolute URL redirects and nav links throughout the app. It must match the subfolder name you dropped into htdocs. Set it once and nothing else needs changing.
+
+| htdocs setup | APP_BASE value |
+|---|---|
+| `htdocs/mtg-manager/` → `http://localhost/mtg-manager/` | `'/mtg-manager'` |
+| `htdocs/cards/` → `http://localhost/cards/` | `'/cards'` |
+| Apache root points directly at the folder | `''` |
+
 ### Password Policy
 - Minimum 8 characters, maximum 32 characters
-- Enforced client-side (`maxlength="32"`) and server-side (`preg_match_all` for Unicode-safe character count)
-- 32-character cap ensures passwords always fall within bcrypt's 72-byte processing limit, even with multibyte characters
+- Enforced client-side (`maxlength="32"`) and server-side using `preg_match_all` for Unicode-safe character counting — no mbstring extension required
+- 32-character cap ensures passwords always fall within bcrypt's 72-byte processing limit, even with multibyte characters such as emoji or CJK
 
 ### SSL Certificate (Windows)
-If `import_scryfall.php` cannot reach the Scryfall API, add your `cacert.pem` path to `php.ini`:
+If `admin/import_scryfall.php` cannot reach the Scryfall API, add your `cacert.pem` path to `php.ini`:
 ```ini
 curl.cainfo = "C:/path/to/cacert.pem"
 ```
+The importer will attempt to auto-resolve common certificate paths and fall back gracefully with an error log entry rather than failing silently.
 
 ### Admin Account
-User ID 1 is the admin. There is no separate admin registration — simply register first. The admin panel is accessible via the dashboard and provides rate limit management and the Scryfall importer.
-
----
-
-## File Structure
-
-```
-mtg-manager/
-├── db_config.php.template    # Copy and fill with your credentials
-├── mtg_schema.sql            # Full schema + idempotent migrations
-├── connect.php               # DB connection
-├── functions.php             # isLoggedIn, isAdmin, requireCsrf, etc.
-├── header.php                # Nav, session init, CSRF meta, fetch interceptor
-├── footer.php
-├── style.css
-│
-├── index.php                 # Login
-├── portal.php                # Register
-├── logout.php
-├── dashboard.php             # COTD, stats, favorite decks
-├── search.php                # Card search with filters
-├── collection.php            # User collection
-├── wishlist.php              # Wishlist
-├── decks.php                 # Deck list
-├── deck_editor.php           # Deck builder
-├── profile.php               # Username, email, password change
-│
-├── import_scryfall.php       # Admin: bulk card importer
-├── admin_unlock.php          # Admin: rate limit panel
-│
-├── add_to_collection_ajax.php
-├── add_to_deck_ajax.php
-├── add_to_deck.php
-├── add_to_wishlist_ajax.php
-├── admin_unlock_action.php
-├── change_password.php
-├── check_email.php
-├── check_username.php
-├── clear_deck.php
-├── create_deck.php
-├── deck_panels_partial.php
-├── delete_deck.php
-├── delete_export.php
-├── do_import_deck.php
-├── export_deck.php
-├── import_deck.php
-├── login.php
-├── register.php
-├── remove_from_collection.php
-├── remove_from_deck.php
-├── remove_from_wishlist.php
-├── toggle_favorite.php
-├── update_collection.php
-├── update_deck_card.php
-├── update_deck_details.php
-├── update_email.php
-├── update_username.php
-├── update_wishlist.php
-└── wishlist_partial.php
-```
+User ID 1 is the admin. There is no separate admin registration — simply be the first to register. The admin panel (`admin/admin_unlock.php`) and importer (`admin/import_scryfall.php`) are linked in the nav bar and protected at the PHP level — non-admin users are redirected away.
 
 ---
 
