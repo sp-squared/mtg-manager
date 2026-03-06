@@ -127,14 +127,16 @@ $where = "WHERE " . implode(' AND ', $conditions);
 
 // Sort
 $sort_options = [
-    'added'    => 'uc.added_at DESC, c.name ASC',
-    'name'     => 'c.name ASC',
-    'cmc_asc'  => 'c.cmc ASC, c.name ASC',
-    'cmc_desc' => 'c.cmc DESC, c.name ASC',
-    'rarity'   => "FIELD(c.rarity,'mythic','rare','uncommon','common'), c.name ASC",
-    'set'      => 's.name ASC, c.name ASC',
-    'qty_desc' => 'uc.quantity DESC, c.name ASC',
-    'newest'   => 'c.imported_at DESC, c.name ASC',
+    'added'       => 'uc.added_at DESC, c.name ASC',
+    'name'        => 'c.name ASC',
+    'cmc_asc'     => 'c.cmc ASC, c.name ASC',
+    'cmc_desc'    => 'c.cmc DESC, c.name ASC',
+    'rarity'      => "FIELD(c.rarity,'mythic','rare','uncommon','common'), c.name ASC",
+    'set'         => 's.name ASC, c.name ASC',
+    'qty_desc'    => 'uc.quantity DESC, c.name ASC',
+    'newest'      => 'c.imported_at DESC, c.name ASC',
+    'price_asc'   => 'cp.price_usd IS NULL ASC, cp.price_usd ASC, c.name ASC',
+    'price_desc'  => 'cp.price_usd IS NULL ASC, cp.price_usd DESC, c.name ASC',
 ];
 $sort_key   = $_GET['sort'] ?? 'added';
 $order_by   = $sort_options[$sort_key] ?? $sort_options['name'];
@@ -334,6 +336,8 @@ $result = $stmt->get_result();
                             <option value="set"      <?= ($_GET['sort']??'')==='set'      ?'selected':'' ?>>Set</option>
                             <option value="qty_desc" <?= ($_GET['sort']??'')==='qty_desc' ?'selected':'' ?>>Qty (most)</option>
                             <option value="newest"   <?= ($_GET['sort']??'')==='newest'   ?'selected':'' ?>>Newest Import</option>
+                            <option value="price_asc"  <?= ($_GET['sort']??'')==='price_asc'  ?'selected':'' ?>>Price ↑</option>
+                            <option value="price_desc" <?= ($_GET['sort']??'')==='price_desc' ?'selected':'' ?>>Price ↓</option>
                         </select>
                     </div>
                 </div>
