@@ -1,4 +1,4 @@
-# mtg-manager
+# ⚔️ mtg-manager 
 
 ![screenshot](/mtg-manager/img/mtg_cards_medium.png)
 
