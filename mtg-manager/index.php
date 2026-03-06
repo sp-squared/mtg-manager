@@ -13,6 +13,12 @@ if (isLoggedIn()) {
         <p style="color:#8899aa;">Sign in to your collection</p>
     </div>
 
+    <?php if (isset($_GET['msg']) && $_GET['msg'] === 'account_deleted'): ?>
+        <div class="alert alert-info alert-dismissible fade show">
+            Your account has been permanently deleted. We're sorry to see you go.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
     <?php if (isset($_GET['error'])): ?>
         <div class="alert alert-danger alert-dismissible fade show" id="login-error-alert">
             <span id="login-error-text"><?= htmlspecialchars($_GET['error']) ?></span>

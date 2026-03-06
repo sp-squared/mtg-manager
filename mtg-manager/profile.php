@@ -266,6 +266,78 @@ $dbc->close();
     </div>
 
 
+<!-- Danger Zone -->
+<div class="card shadow-sm mx-auto mt-4" style="max-width:720px;border:1px solid rgba(220,53,69,0.3);">
+    <div class="card-header d-flex justify-content-between align-items-center"
+         style="background:rgba(220,53,69,0.08);border-bottom:1px solid rgba(220,53,69,0.2);">
+        <span style="color:#f87171;font-weight:600;">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>Danger Zone
+        </span>
+    </div>
+    <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+            <div style="color:#e8e8e8;font-weight:500;">Delete Account</div>
+            <div class="small" style="color:#8899aa;">Permanently delete your account and all associated data. This cannot be undone.</div>
+        </div>
+        <button type="button" class="btn btn-danger btn-sm"
+                data-bs-toggle="modal" data-bs-target="#deleteAccountModal">
+            <i class="bi bi-person-x-fill me-1"></i>Delete My Account
+        </button>
+    </div>
+</div>
+
+
+<!-- Delete Account Modal -->
+<div class="modal fade" id="deleteAccountModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border:1px solid rgba(220,53,69,0.4);">
+            <div class="modal-header" style="background:rgba(220,53,69,0.08);border-bottom:1px solid rgba(220,53,69,0.2);">
+                <h5 class="modal-title" style="color:#f87171;">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Delete Your Account
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" id="deleteAccountClose"></button>
+            </div>
+            <div class="modal-body py-4">
+                <p style="color:#e8e8e8;">This will <strong>permanently delete</strong> your account and all of the following:</p>
+                <ul class="mb-3" style="color:#8899aa;">
+                    <li>Your entire card collection (<?= $col_count ?> card<?= $col_count !== 1 ? 's' : '' ?>)</li>
+                    <li>All your decks (<?= $deck_count ?> deck<?= $deck_count !== 1 ? 's' : '' ?>)</li>
+                    <li>Your wishlist (<?= $wish_count ?> item<?= $wish_count !== 1 ? 's' : '' ?>)</li>
+                    <li>All your deck export codes</li>
+                    <li>Your account login</li>
+                </ul>
+                <p class="mb-4" style="color:#f87171;font-size:0.9rem;">
+                    <i class="bi bi-shield-x me-1"></i>There is no recovery. This is immediate and irreversible.
+                </p>
+
+                <div class="mb-3">
+                    <label class="d-flex align-items-start gap-2 p-3 rounded"
+                           style="cursor:pointer;border:1px solid rgba(220,53,69,0.3);background:rgba(220,53,69,0.06);">
+                        <input type="checkbox" class="form-check-input flex-shrink-0 mt-1" id="delete-confirm-checkbox">
+                        <span style="color:#e8e8e8;font-size:0.9rem;">
+                            I understand this action is <strong>permanent</strong> and <strong>cannot be undone.</strong>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="mb-1">
+                    <label class="form-label mb-1" style="color:#8899aa;font-size:0.85rem;">
+                        Type <strong style="color:#f87171;letter-spacing:0.05em;">I UNDERSTAND</strong> to confirm:
+                    </label>
+                    <input type="text" class="form-control" id="delete-confirm-input"
+                           placeholder="I UNDERSTAND" autocomplete="off">
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid rgba(220,53,69,0.2);">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete-account-btn" disabled>
+                    <i class="bi bi-person-x-fill me-1"></i>Delete My Account
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Edit Username Modal -->
 <div class="modal fade" id="editUsernameModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -616,6 +688,45 @@ document.getElementById('save-email-btn').addEventListener('click', async functi
 document.getElementById('editEmailModal').addEventListener('show.bs.modal', function () {
     document.getElementById('email-modal-error').classList.add('d-none');
 });
+
+// ── Delete Account ───────────────────────────────────────────────────────────
+function updateDeleteBtn() {
+    const checked = document.getElementById('delete-confirm-checkbox').checked;
+    const typed   = document.getElementById('delete-confirm-input').value.trim();
+    document.getElementById('confirm-delete-account-btn').disabled = !(checked && typed === 'I UNDERSTAND');
+}
+document.getElementById('delete-confirm-checkbox').addEventListener('change', updateDeleteBtn);
+document.getElementById('delete-confirm-input').addEventListener('input', updateDeleteBtn);
+
+document.getElementById('deleteAccountModal').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('delete-confirm-checkbox').checked = false;
+    document.getElementById('delete-confirm-input').value = '';
+    updateDeleteBtn();
+});
+
+document.getElementById('confirm-delete-account-btn').addEventListener('click', async function () {
+    const btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Deleting…';
+
+    try {
+        const fd = new FormData();
+        const res  = await fetch('actions/delete_account.php', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.success) {
+            window.location.href = 'index.php?msg=account_deleted';
+        } else {
+            showToast(data.error || 'Delete failed. Please try again.', 'danger');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-person-x-fill me-1"></i>Delete My Account';
+        }
+    } catch (_) {
+        showToast('Network error — please try again.', 'danger');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-person-x-fill me-1"></i>Delete My Account';
+    }
+});
+// ─────────────────────────────────────────────────────────────────────────────
 </script>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>
