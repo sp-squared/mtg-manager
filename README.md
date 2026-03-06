@@ -2,6 +2,11 @@
 
 ![screenshot](/mtg-manager/img/logo.png)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![WOTC](https://img.shields.io/badge/WOTC-blue.svg)](https://company.wizards.com/en)
+[![Scryfall](https://img.shields.io/badge/Scryfall-blue.svg)](https://scryfall.com/docs/faqs)
+![Static Badge](https://img.shields.io/badge/Magic:%20The%20Gathering-8A2BE2)
+
 A self-hosted Magic: The Gathering collection, deck, and wishlist manager built with PHP, MySQL, and Bootstrap. Designed for local area network (LAN) deployment — run it on your own machine and share it with friends.
 
 Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No third-party account or subscription required.
