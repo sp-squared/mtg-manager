@@ -67,6 +67,13 @@ require_once __DIR__ . '/connect.php';   // ensures $dbc is always available bef
             <ul class="navbar-nav ms-auto">
                 <?php if (isAdmin()): ?>
                 <li class="nav-item">
+                    <a class="nav-link <?= $current_page === 'import_scryfall.php' ? 'active' : '' ?>"
+                       href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/admin/import_scryfall.php"
+                       style="color:#c9a227;">
+                        <i class="bi bi-cloud-download me-1"></i>Import
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link <?= $current_page === 'update_prices.php' ? 'active' : '' ?>"
                        href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/admin/update_prices.php"
                        style="color:#c9a227;">
