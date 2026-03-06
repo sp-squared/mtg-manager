@@ -43,22 +43,27 @@ function truncate($string, $length = 16, $append = '…') {
 // Total card count
 $total_stmt = $dbc->prepare(
     "SELECT SUM(dc.quantity) as total,
-            SUM(IF(dc.is_sideboard=0, dc.quantity, 0)) as main_count,
-            SUM(IF(dc.is_sideboard=1, dc.quantity, 0)) as side_count,
-            COUNT(dc.card_id) as unique_total,
-            SUM(IF(dc.is_sideboard=0, 1, 0)) as unique_main,
-            SUM(IF(dc.is_sideboard=1, 1, 0)) as unique_side
-     FROM deck_cards dc WHERE dc.deck_id = ?");
+            SUM(IF(dc.is_sideboard=0 AND c.type_line NOT LIKE '%Token%', dc.quantity, 0)) as main_count,
+            SUM(IF(dc.is_sideboard=1 AND c.type_line NOT LIKE '%Token%', dc.quantity, 0)) as side_count,
+            SUM(IF(c.type_line LIKE '%Token%', dc.quantity, 0)) as token_qty,
+            SUM(IF(dc.is_sideboard=0 AND c.type_line NOT LIKE '%Token%', 1, 0)) as unique_main,
+            SUM(IF(dc.is_sideboard=1 AND c.type_line NOT LIKE '%Token%', 1, 0)) as unique_side,
+            SUM(IF(c.type_line LIKE '%Token%', 1, 0)) as unique_tokens
+     FROM deck_cards dc
+     JOIN cards c ON c.id = dc.card_id
+     WHERE dc.deck_id = ?");
 $total_stmt->bind_param("i", $deck_id);
 $total_stmt->execute();
 $totals = $total_stmt->get_result()->fetch_assoc();
 $total_stmt->close();
-$total_cards  = (int)($totals['total']       ?? 0);
-$main_count   = (int)($totals['main_count']   ?? 0);
-$side_count   = (int)($totals['side_count']   ?? 0);
-$unique_total = (int)($totals['unique_total']  ?? 0);
-$unique_main  = (int)($totals['unique_main']   ?? 0);
-$unique_side  = (int)($totals['unique_side']   ?? 0);
+$total_cards   = (int)($totals['total']        ?? 0);
+$main_count    = (int)($totals['main_count']   ?? 0);
+$side_count    = (int)($totals['side_count']   ?? 0);
+$token_qty     = (int)($totals['token_qty']    ?? 0);
+$unique_main   = (int)($totals['unique_main']  ?? 0);
+$unique_side   = (int)($totals['unique_side']  ?? 0);
+$unique_tokens = (int)($totals['unique_tokens'] ?? 0);
+$unique_total  = $unique_main + $unique_side;
 
 // Color distribution — join through card_colors
 $color_stmt = $dbc->prepare(
@@ -151,7 +156,8 @@ $singleton_stmt = $dbc->prepare(
      WHERE dc.deck_id = ?
        AND dc.is_sideboard = 0
        AND dc.quantity > 1
-       AND c.type_line NOT LIKE '%Basic Land%'"
+       AND c.type_line NOT LIKE '%Basic Land%'
+       AND c.type_line NOT LIKE '%Token%'"
 );
 $singleton_stmt->bind_param("i", $deck_id);
 $singleton_stmt->execute();
@@ -169,6 +175,7 @@ $curve_stmt = $dbc->prepare(
      JOIN cards c ON dc.card_id = c.id
      WHERE dc.deck_id = ? AND dc.is_sideboard = 0
        AND c.type_line NOT LIKE '%Land%'
+       AND c.type_line NOT LIKE '%Token%'
      GROUP BY cmc_bucket
      ORDER BY cmc_bucket"
 );
@@ -465,9 +472,16 @@ $token_count = count($token_cards);
                             <td class="text-end fw-bold"><?= $side_count ?></td>
                             <td class="text-end" style="color:#8899aa;"><?= $unique_side ?></td>
                         </tr>
+                        <?php if ($token_qty > 0): ?>
+                        <tr>
+                            <td style="color:#8899aa;"><i class="bi bi-stars me-1"></i>Tokens</td>
+                            <td class="text-end fw-bold" style="color:#8899aa;"><?= $token_qty ?></td>
+                            <td class="text-end" style="color:#8899aa;"><?= $unique_tokens ?></td>
+                        </tr>
+                        <?php endif; ?>
                         <tr style="border-top:1px solid rgba(201,162,39,0.3);">
-                            <td><strong>Total</strong></td>
-                            <td class="text-end fw-bold" style="color:#c9a227;"><?= $total_cards ?></td>
+                            <td><strong>Total</strong> <span class="small" style="color:#8899aa;">(ex. tokens)</span></td>
+                            <td class="text-end fw-bold" style="color:#c9a227;"><?= $main_count + $side_count ?></td>
                             <td class="text-end" style="color:#8899aa;"><?= $unique_total ?></td>
                         </tr>
                     </table>
