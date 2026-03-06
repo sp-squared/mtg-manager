@@ -186,7 +186,8 @@ $running = ($_SERVER['REQUEST_METHOD'] === 'POST');
             </p>
             <ul class="small mb-3" style="color:#8899aa;">
                 <li>Existing cards are updated, not duplicated.</li>
-                <li>Tokens, art series, and emblems are skipped.</li>
+                <li>Token cards are imported and usable in deck building.</li>
+                <li>Art series, vanguard, scheme, and emblems are skipped.</li>
                 <li>This may take several minutes — do not close the page.</li>
             </ul>
             <?php if (!$running): ?>
@@ -304,8 +305,7 @@ $format_cache = [];
 $format_sel   = $dbc->prepare("SELECT id FROM formats WHERE name = ?");
 $format_ins   = $dbc->prepare("INSERT IGNORE INTO formats (name) VALUES (?)");
 
-$skip_layouts = ['token','art_series','emblem','double_faced_token','vanguard',
-                 'scheme','conspiracy','planar'];
+$skip_layouts = ['art_series','emblem','vanguard','scheme','conspiracy','planar'];
 
 $imported = 0;
 $skipped  = 0;
@@ -408,7 +408,7 @@ foreach ([$set_stmt,$color_stmt,$card_stmt,$card_color_stmt,
 progress('', '#e8e8e8');
 progress("✅ Import complete!", '#75b798');
 progress("   Cards imported/updated : " . number_format($imported), '#75b798');
-progress("   Skipped (tokens etc.)  : " . number_format($skipped),  '#8899aa');
+progress("   Skipped (art/emblem)   : " . number_format($skipped),  '#8899aa');
 progress("   Errors                 : " . number_format($errors),   $errors ? '#f87171' : '#8899aa');
 
 done:

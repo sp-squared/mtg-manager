@@ -119,14 +119,16 @@ if (count($active_colors) === 1) {
 // Type breakdown for summary
 $type_stmt = $dbc->prepare(
     "SELECT
-        SUM(IF(c.type_line LIKE '%Creature%',    dc.quantity, 0)) as creatures,
+        SUM(IF(c.type_line LIKE '%Token%',       dc.quantity, 0)) as tokens,
+        SUM(IF(c.type_line LIKE '%Creature%' AND c.type_line NOT LIKE '%Token%', dc.quantity, 0)) as creatures,
         SUM(IF(c.type_line LIKE '%Instant%',     dc.quantity, 0)) as instants,
         SUM(IF(c.type_line LIKE '%Sorcery%',     dc.quantity, 0)) as sorceries,
         SUM(IF(c.type_line LIKE '%Enchantment%', dc.quantity, 0)) as enchantments,
         SUM(IF(c.type_line LIKE '%Artifact%',    dc.quantity, 0)) as artifacts,
         SUM(IF(c.type_line LIKE '%Planeswalker%',dc.quantity, 0)) as planeswalkers,
         SUM(IF(c.type_line LIKE '%Land%',        dc.quantity, 0)) as lands,
-        SUM(IF(c.type_line LIKE '%Creature%',    1, 0)) as u_creatures,
+        SUM(IF(c.type_line LIKE '%Token%',       1, 0)) as u_tokens,
+        SUM(IF(c.type_line LIKE '%Creature%' AND c.type_line NOT LIKE '%Token%', 1, 0)) as u_creatures,
         SUM(IF(c.type_line LIKE '%Instant%',     1, 0)) as u_instants,
         SUM(IF(c.type_line LIKE '%Sorcery%',     1, 0)) as u_sorceries,
         SUM(IF(c.type_line LIKE '%Enchantment%', 1, 0)) as u_enchantments,
@@ -182,6 +184,19 @@ foreach ($curve_rows as $row) {
 }
 $curve_max = max($curve_data) ?: 1;
 $curve_labels = ['0','1','2','3','4','5','6','7+'];
+
+// Token cards in deck
+$token_stmt = $dbc->prepare(
+    "SELECT c.id, c.name, c.type_line, c.power, c.toughness, c.image_uri, dc.quantity
+     FROM deck_cards dc
+     JOIN cards c ON dc.card_id = c.id
+     WHERE dc.deck_id = ? AND c.type_line LIKE '%Token%'
+     ORDER BY c.name");
+$token_stmt->bind_param("i", $deck_id);
+$token_stmt->execute();
+$token_cards = $token_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$token_stmt->close();
+$token_count = count($token_cards);
 ?>
 
 <div class="container-fluid my-4">
@@ -548,10 +563,11 @@ $curve_labels = ['0','1','2','3','4','5','6','7+'];
                         </thead>
                         <?php
                         $type_labels = [
+                            'tokens'        => ['Tokens',        'bi-stars'],
                             'creatures'     => ['Creatures',     'bi-shield-fill'],
                             'instants'      => ['Instants',      'bi-lightning-fill'],
-                            'sorceries'     => ['Sorceries',     'bi-stars'],
-                            'enchantments'  => ['Enchantments',  'bi-magic'],
+                            'sorceries'     => ['Sorceries',     'bi-magic'],
+                            'enchantments'  => ['Enchantments',  'bi-flower1'],
                             'artifacts'     => ['Artifacts',     'bi-gear-fill'],
                             'planeswalkers' => ['Planeswalkers', 'bi-person-badge-fill'],
                             'lands'         => ['Lands',         'bi-tree-fill'],
@@ -672,6 +688,40 @@ $curve_labels = ['0','1','2','3','4','5','6','7+'];
                 </div>
             </div>
         </div>
+
+        <?php if (!empty($token_cards)): ?>
+        <!-- Token Cards -->
+        <div class="col-12 mb-4">
+            <div class="card shadow-sm" style="border-top:4px solid #8899aa;">
+                <div class="card-body">
+                    <h5 style="color:#8899aa;">
+                        <i class="bi bi-stars me-2"></i>Token Cards
+                        <span class="badge ms-2" style="background:rgba(136,153,170,0.2);color:#8899aa;border:1px solid rgba(136,153,170,0.4);"><?= $token_count ?> type<?= $token_count !== 1 ? 's' : '' ?></span>
+                    </h5>
+                    <p class="small mb-3" style="color:#8899aa;">Token cards associated with this deck — keep these handy during play.</p>
+                    <div class="d-flex flex-wrap gap-3">
+                        <?php foreach ($token_cards as $tc): ?>
+                        <div class="d-flex align-items-center gap-2 px-3 py-2 rounded"
+                             style="background:rgba(255,255,255,0.04);border:1px solid rgba(136,153,170,0.25);">
+                            <?php if ($tc['image_uri']): ?>
+                            <img src="<?= htmlspecialchars($tc['image_uri']) ?>"
+                                 alt="<?= htmlspecialchars($tc['name']) ?>"
+                                 style="height:48px;border-radius:4px;" loading="lazy">
+                            <?php endif; ?>
+                            <div>
+                                <div style="color:#e8e8e8;font-size:0.85rem;font-weight:600;"><?= htmlspecialchars($tc['name']) ?></div>
+                                <div style="color:#8899aa;font-size:0.75rem;"><?= htmlspecialchars($tc['type_line']) ?></div>
+                                <?php if ($tc['power'] !== null): ?>
+                                <div style="color:#8899aa;font-size:0.75rem;"><?= htmlspecialchars($tc['power']) ?>/<?= htmlspecialchars($tc['toughness']) ?></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
 
     </div>
     <?php endif; ?>
