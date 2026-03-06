@@ -35,30 +35,30 @@ require_once __DIR__ . '/connect.php';   // ensures $dbc is always available bef
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav me-auto">
                 <li class="nav-item">
-                    <a class="nav-link <?= $current_page === 'search.php' ? 'active' : '' ?>" href="search.php">Search</a>
+                    <a class="nav-link <?= $current_page === 'search.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/search.php">Search</a>
                 </li>
                 <?php if (isLoggedIn()): ?>
                     <li class="nav-item">
-                        <a class="nav-link <?= $current_page === 'collection.php' ? 'active' : '' ?>" href="collection.php">Collection</a>
+                        <a class="nav-link <?= $current_page === 'collection.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/collection.php">Collection</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= in_array($current_page, ['decks.php','deck_editor.php']) ? 'active' : '' ?>" href="decks.php">Decks</a>
+                        <a class="nav-link <?= in_array($current_page, ['decks.php','deck_editor.php']) ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/decks.php">Decks</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= $current_page === 'wishlist.php' ? 'active' : '' ?>" href="wishlist.php">Wishlist</a>
+                        <a class="nav-link <?= $current_page === 'wishlist.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/wishlist.php">Wishlist</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= $current_page === 'import_deck.php' ? 'active' : '' ?>" href="import_deck.php">Import Deck</a>
+                        <a class="nav-link <?= $current_page === 'import_deck.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/import_deck.php">Import Deck</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= $current_page === 'profile.php' ? 'active' : '' ?>" href="profile.php">Profile</a>
+                        <a class="nav-link <?= $current_page === 'profile.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/profile.php">Profile</a>
                     </li>
                 <?php else: ?>
                     <li class="nav-item">
-                        <a class="nav-link <?= $current_page === 'portal.php' ? 'active' : '' ?>" href="portal.php">Register</a>
+                        <a class="nav-link <?= $current_page === 'portal.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/portal.php">Register</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= $current_page === 'index.php' ? 'active' : '' ?>" href="index.php">Login</a>
+                        <a class="nav-link <?= $current_page === 'index.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/index.php">Login</a>
                     </li>
                 <?php endif; ?>
             </ul>
