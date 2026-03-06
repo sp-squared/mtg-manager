@@ -1,0 +1,14 @@
+# Database credentials — never commit
+includes/db_config.php
+
+# Logs and cache
+*.log
+*.err
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

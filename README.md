@@ -117,9 +117,9 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 
 2. **Create the database config** — copy the template and fill in your credentials:
    ```bash
-   cp db_config.php.template db_config.php
+   cp includes/db_config.template.php includes/db_config.php
    ```
-   Edit `db_config.php` (store outside web root in production):
+   Edit `includes/db_config.php`:
    ```php
    define('DB_HOST', 'localhost');
    define('DB_USER', 'mtg_collection');
@@ -129,7 +129,7 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 
 3. **Run the schema** in MySQL Workbench or CLI:
    ```bash
-   mysql -u root -p < mtg_schema.sql
+   mysql -u root -p < database/mtg_schema.sql
    ```
 
 4. **Enable the MySQL event scheduler** for nightly gap-fill (add to `my.ini`):
