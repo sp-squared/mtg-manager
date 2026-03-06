@@ -133,9 +133,17 @@ $sort_options = [
     'rarity'   => "FIELD(c.rarity,'mythic','rare','uncommon','common'), c.name ASC",
     'set'      => 's.name ASC, c.name ASC',
     'qty_desc' => 'uc.quantity DESC, c.name ASC',
+    'newest'   => 'c.imported_at DESC, c.name ASC',
 ];
 $sort_key   = $_GET['sort'] ?? 'name';
 $order_by   = $sort_options[$sort_key] ?? $sort_options['name'];
+
+// Strip empty params from pagination URLs
+function clean_search_params(array $params, array $overrides = []): string {
+    $merged = array_merge($params, $overrides);
+    $filtered = array_filter($merged, fn($v) => $v !== '' && $v !== null);
+    return http_build_query($filtered);
+}
 
 // Count total results (filtered)
 $count_sql = "SELECT COUNT(*) as total
@@ -292,6 +300,7 @@ $result = $stmt->get_result();
                             <option value="rarity"   <?= ($_GET['sort']??'')==='rarity'   ?'selected':'' ?>>Rarity</option>
                             <option value="set"      <?= ($_GET['sort']??'')==='set'      ?'selected':'' ?>>Set</option>
                             <option value="qty_desc" <?= ($_GET['sort']??'')==='qty_desc' ?'selected':'' ?>>Qty (most)</option>
+                            <option value="newest"   <?= ($_GET['sort']??'')==='newest'   ?'selected':'' ?>>Newest Import</option>
                         </select>
                     </div>
                 </div>
@@ -305,15 +314,15 @@ $result = $stmt->get_result();
             <nav aria-label="Page navigation">
                 <ul class="pagination pagination-sm mb-0">
                     <?php if ($page > 1): ?>
-                        <li class="page-item"><a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => $page-1])) ?>">Previous</a></li>
+                        <li class="page-item"><a class="page-link" href="?<?= clean_search_params($_GET, ['page' => $page-1]) ?>">Previous</a></li>
                     <?php endif; ?>
                     <?php for ($i = max(1, $page-5); $i <= min($total_pages, $page+5); $i++): ?>
                         <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-                            <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => $i])) ?>"><?= $i ?></a>
+                            <a class="page-link" href="?<?= clean_search_params($_GET, ['page' => $i]) ?>"><?= $i ?></a>
                         </li>
                     <?php endfor; ?>
                     <?php if ($page < $total_pages): ?>
-                        <li class="page-item"><a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => $page+1])) ?>">Next</a></li>
+                        <li class="page-item"><a class="page-link" href="?<?= clean_search_params($_GET, ['page' => $page+1]) ?>">Next</a></li>
                     <?php endif; ?>
                 </ul>
             </nav>
@@ -425,6 +434,23 @@ $result = $stmt->get_result();
     </div>
 </div>
 
+<script>
+// Strip empty fields before form submits so the URL stays clean
+(function () {
+    ['search-form', 'filter-form'].forEach(function (id) {
+        var form = document.getElementById(id);
+        if (!form) return;
+        form.addEventListener('submit', function () {
+            Array.from(form.elements).forEach(function (el) {
+                if (!el.name) return;
+                // Keep checkboxes/selects that have a meaningful default
+                if (el.type === 'checkbox' && !el.checked) { el.disabled = true; return; }
+                if (el.value === '') el.disabled = true;
+            });
+        });
+    });
+})();
+</script>
 <script>
 let _colCardId = null;
 let _colRulingsCache = {};

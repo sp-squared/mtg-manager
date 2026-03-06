@@ -1,0 +1,12 @@
+<?php
+// Database configuration - store outside web root
+define('DB_HOST', 'localhost');
+define('DB_USER', 'mtg_collection');
+define('DB_PASS', 'walter78');
+define('DB_NAME', 'mtg_database');
+
+// Path to CA certificate bundle for outbound HTTPS (Scryfall API)
+// Download latest from: https://curl.se/docs/caextract.html
+// Place cacert.pem in the same folder as this file
+define('CACERT_PATH', __DIR__ . '/cacert.pem');
+?>

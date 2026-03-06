@@ -453,6 +453,23 @@ $results = $stmt->get_result();
 </div>
 
 <script>
+// Strip empty fields before form submits so the URL stays clean
+(function () {
+    ['search-form', 'filter-form'].forEach(function (id) {
+        var form = document.getElementById(id);
+        if (!form) return;
+        form.addEventListener('submit', function () {
+            Array.from(form.elements).forEach(function (el) {
+                if (!el.name) return;
+                // Keep checkboxes/selects that have a meaningful default
+                if (el.type === 'checkbox' && !el.checked) { el.disabled = true; return; }
+                if (el.value === '') el.disabled = true;
+            });
+        });
+    });
+})();
+</script>
+<script>
 let _currentCardId = null;
 let _rulingsCache  = {};
 

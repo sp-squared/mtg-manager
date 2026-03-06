@@ -281,7 +281,8 @@ $card_stmt = $dbc->prepare(
         cmc=VALUES(cmc), type_line=VALUES(type_line), oracle_text=VALUES(oracle_text),
         power=VALUES(power), toughness=VALUES(toughness), loyalty=VALUES(loyalty),
         image_uri=VALUES(image_uri), flavor_text=VALUES(flavor_text),
-        keywords=VALUES(keywords)"
+        keywords=VALUES(keywords),
+        imported_at = IFNULL(imported_at, NOW())"
 );
 $card_color_stmt = $dbc->prepare(
     "INSERT IGNORE INTO card_colors (card_id, color_id) VALUES (?, ?)"
