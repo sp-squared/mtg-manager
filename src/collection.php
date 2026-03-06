@@ -260,8 +260,8 @@ $result = $stmt->get_result();
                             foreach ($color_options as $code => $label_name):
                                 $checked = in_array($code, $selected_colors) ? 'checked' : '';
                             ?>
-                            <div class="form-check form-check-inline m-0">
-                                <input class="form-check-input" class="form-check-input color-checkbox" type="checkbox" name="colors[]"
+                            <div class="form-check form-check-inline m-0 color-option">
+                                <input class="form-check-input color-checkbox" type="checkbox" name="colors[]"
                                        value="<?= $code ?>" id="col_<?= $code ?>" <?= $checked ?>>
                                 <label class="form-check-label d-flex align-items-center gap-1" for="col_<?= $code ?>">
                                     <span style="display:inline-flex;align-items:center;justify-content:center;
@@ -461,7 +461,7 @@ function toggleColorless(cb) {
 }
 // Apply on page load if colorless is already checked (e.g. back button / pre-filled)
 (function() {
-    var cb = document.getElementById('colorless');
+    var cb = document.getElementById('col_colorless');
     if (cb && cb.checked) toggleColorless(cb);
 })();
 </script>
