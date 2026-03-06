@@ -404,7 +404,12 @@ $token_count = count($token_cards);
                                 $owned = (int)($card['owned'] ?? 0);
                             ?>
                                 <tr>
-                                    <td title="<?= htmlspecialchars($card['name']) ?>"><?= htmlspecialchars(truncate($card['name'])) ?></td>
+                                    <td title="<?= htmlspecialchars($card['name']) ?>">
+                                        <?= htmlspecialchars(truncate($card['name'])) ?>
+                                        <?php if (strpos($card['type_line'], 'Token') !== false && (int)$card['quantity'] > 1): ?>
+                                            <span style="color:#8899aa;font-size:0.78rem;"> ×<?= (int)$card['quantity'] ?></span>
+                                        <?php endif; ?>
+                                    </td>
                                     <td><?= htmlspecialchars($card['mana_cost'] ?? '—') ?></td>
                                     <td title="<?= htmlspecialchars($card['type_line']) ?>"><?= htmlspecialchars(truncate($card['type_line'], 12)) ?></td>
                                     <td>
@@ -723,7 +728,12 @@ $token_count = count($token_cards);
                                  style="height:48px;border-radius:4px;" loading="lazy">
                             <?php endif; ?>
                             <div>
-                                <div style="color:#e8e8e8;font-size:0.85rem;font-weight:600;"><?= htmlspecialchars($tc['name']) ?></div>
+                                <div style="color:#e8e8e8;font-size:0.85rem;font-weight:600;">
+                                    <?= htmlspecialchars($tc['name']) ?>
+                                    <?php if ((int)$tc['quantity'] > 1): ?>
+                                        <span style="color:#8899aa;font-size:0.8rem;font-weight:400;"> ×<?= (int)$tc['quantity'] ?></span>
+                                    <?php endif; ?>
+                                </div>
                                 <div style="color:#8899aa;font-size:0.75rem;"><?= htmlspecialchars($tc['type_line']) ?></div>
                                 <?php if ($tc['power'] !== null): ?>
                                 <div style="color:#8899aa;font-size:0.75rem;"><?= htmlspecialchars($tc['power']) ?>/<?= htmlspecialchars($tc['toughness']) ?></div>
