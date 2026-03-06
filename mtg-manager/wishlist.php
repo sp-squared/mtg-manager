@@ -32,8 +32,21 @@ if (isset($_GET['msg'])) {
         </div>
     <?php endif; ?>
 
-    <div class="mb-3">
+    <div class="mb-3 d-flex align-items-center gap-3 flex-wrap">
         <a href="search.php" class="btn btn-primary">🔍 Search for Cards to Add</a>
+        <?php if (isset($wish_value) && $wish_value !== null): ?>
+        <div class="d-flex align-items-center gap-2 px-3 py-2 rounded"
+             style="background:rgba(201,162,39,0.1);border:1px solid rgba(201,162,39,0.25);">
+            <i class="bi bi-currency-dollar" style="color:#c9a227;"></i>
+            <span style="color:#e8e8e8;font-size:0.9rem;">
+                Wishlist value:
+                <strong style="color:#c9a227;"><?= '$' . number_format($wish_value, 2) ?></strong>
+                <span style="color:#8899aa;font-size:0.8rem;">
+                    (<?= $wish_priced_count ?> of <?= $total_results ?> cards priced)
+                </span>
+            </span>
+        </div>
+        <?php endif; ?>
     </div>
 
     <?php
@@ -50,9 +63,32 @@ if (isset($_GET['msg'])) {
     $total_pages = ceil($total_results / $results_per_page);
     $count_stmt->close();
 
-    $query = "SELECT w.card_id, w.priority, c.name, c.mana_cost, c.type_line, c.image_uri
+    // Wishlist total cost
+    $wish_value        = null;
+    $wish_priced_count = 0;
+    $wv_check = $dbc->query("SHOW TABLES LIKE 'card_prices'");
+    if ($wv_check && $wv_check->num_rows > 0) {
+        $wv_stmt = $dbc->prepare(
+            "SELECT SUM(cp.price_usd) as total_value, COUNT(cp.card_id) as priced
+             FROM wishlist w
+             JOIN card_prices cp ON cp.card_id = w.card_id
+             WHERE w.user_id = ?"
+        );
+        $wv_stmt->bind_param("i", $user_id);
+        $wv_stmt->execute();
+        $wv_row = $wv_stmt->get_result()->fetch_assoc();
+        $wv_stmt->close();
+        if ($wv_row['total_value'] !== null) {
+            $wish_value        = (float)$wv_row['total_value'];
+            $wish_priced_count = (int)$wv_row['priced'];
+        }
+    }
+
+    $query = "SELECT w.card_id, w.priority, c.name, c.mana_cost, c.type_line, c.image_uri, c.rarity,
+                     cp.price_usd, cp.price_usd_foil
               FROM wishlist w
               JOIN cards c ON w.card_id = c.id
+              LEFT JOIN card_prices cp ON cp.card_id = w.card_id
               WHERE w.user_id = ?
               ORDER BY w.priority DESC, c.name
               LIMIT ? OFFSET ?";
@@ -106,10 +142,17 @@ if (isset($_GET['msg'])) {
                             <p class="card-text small">
                                 <strong>Mana:</strong> <?= htmlspecialchars($row['mana_cost'] ?? '—') ?><br>
                                 <strong>Type:</strong> <?= htmlspecialchars($row['type_line']) ?><br>
-                                <strong>Priority:</strong> 
+                                <strong>Priority:</strong>
                                 <span class="priority-<?= $row['priority'] == 3 ? 'high' : ($row['priority'] == 2 ? 'medium' : 'low') ?>">
                                     <?= getPriorityLabel($row['priority']) ?>
                                 </span>
+                                <?php if ($row['price_usd'] !== null): ?>
+                                <br><strong>Price:</strong>
+                                <span style="color:#c9a227;">$<?= number_format((float)$row['price_usd'], 2) ?></span>
+                                <?php if ($row['price_usd_foil'] !== null): ?>
+                                <span style="color:#8899aa;font-size:0.8em;"> / foil $<?= number_format((float)$row['price_usd_foil'], 2) ?></span>
+                                <?php endif; ?>
+                                <?php endif; ?>
                             </p>
                         </div>
                         <div class="card-footer bg-transparent">

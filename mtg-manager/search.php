@@ -154,9 +154,11 @@ $total_pages = ceil($total_results / $results_per_page);
 // Fetch cards for current page
 $sql = "SELECT c.id, c.name, c.mana_cost, c.cmc, c.type_line, c.oracle_text, c.rarity,
                c.power, c.toughness, c.loyalty, c.image_uri, c.flavor_text, c.keywords,
-               s.name as set_name
+               s.name as set_name,
+               cp.price_usd, cp.price_usd_foil, cp.price_eur
         FROM cards c
         LEFT JOIN sets s ON c.set_id = s.id
+        LEFT JOIN card_prices cp ON cp.card_id = c.id
         $where
         ORDER BY {$order_by}
         LIMIT ? OFFSET ?";
@@ -352,6 +354,13 @@ $results = $stmt->get_result();
                                 <strong>Type:</strong> <?= htmlspecialchars($card['type_line']) ?><br>
                                 <strong>Set:</strong> <?= htmlspecialchars($card['set_name']) ?><br>
                                 <strong>Rarity:</strong> <?= $card['rarity'] ?>
+                                <?php if ($card['price_usd'] !== null): ?>
+                                <br><strong>Price:</strong>
+                                <span style="color:#c9a227;">$<?= number_format((float)$card['price_usd'], 2) ?></span>
+                                <?php if ($card['price_usd_foil'] !== null): ?>
+                                <span style="color:#8899aa;font-size:0.8em;"> / foil $<?= number_format((float)$card['price_usd_foil'], 2) ?></span>
+                                <?php endif; ?>
+                                <?php endif; ?>
                             </p>
                         </div>
                         <?php if (isLoggedIn()): ?>
@@ -431,12 +440,22 @@ $results = $stmt->get_result();
                             <a class="nav-link active" data-bs-toggle="tab" href="#tab-details" style="font-size:0.85rem;">Details</a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#tab-prices" id="prices-tab-link" style="font-size:0.85rem;">Prices</a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" data-bs-toggle="tab" href="#tab-rulings" id="rulings-tab-link" style="font-size:0.85rem;">Rulings</a>
                         </li>
                     </ul>
                     <div class="tab-content flex-grow-1">
                         <div class="tab-pane fade show active" id="tab-details">
                             <div id="cardModalInfo"></div>
+                        </div>
+                        <div class="tab-pane fade" id="tab-prices">
+                            <div id="cardModalPrices" style="color:#e8e8e8;font-size:0.85rem;">
+                                <div class="text-center py-3" style="color:#8899aa;">
+                                    <span class="spinner-border spinner-border-sm me-2"></span>Loading prices…
+                                </div>
+                            </div>
                         </div>
                         <div class="tab-pane fade" id="tab-rulings">
                             <div id="cardModalRulings" style="color:#e8e8e8;font-size:0.85rem;">
@@ -501,6 +520,7 @@ function toggleColorless(cb) {
 <script>
 let _currentCardId = null;
 let _rulingsCache  = {};
+let _pricesCache   = {};
 
 function openCardModal(card) {
     _currentCardId = card.id;
@@ -543,13 +563,16 @@ function openCardModal(card) {
             <tr><td class="text-muted">Type</td>   <td><strong>${escHtml(card.type_line||'—')}</strong></td></tr>
             <tr><td class="text-muted">Rarity</td> <td><strong>${rl}</strong></td></tr>
             ${ptHtml}
+            ${card.price_usd != null ? `<tr><td class="text-muted">Price</td><td><strong style="color:#c9a227;">$${parseFloat(card.price_usd).toFixed(2)}</strong>${card.price_usd_foil != null ? ` <span style="color:#8899aa;font-size:0.8em;">/ foil $${parseFloat(card.price_usd_foil).toFixed(2)}</span>` : ''}</td></tr>` : ''}
         </table>
         ${keywordsHtml}
         ${oracleHtml}
         ${flavorHtml}
     `;
 
-    // Reset rulings tab
+    // Reset lazy-loaded tabs
+    document.getElementById('cardModalPrices').innerHTML =
+        '<div class="text-center py-3" style="color:#8899aa;"><span class="spinner-border spinner-border-sm me-2"></span>Loading prices…</div>';
     document.getElementById('cardModalRulings').innerHTML =
         '<div class="text-center py-3" style="color:#8899aa;"><span class="spinner-border spinner-border-sm me-2"></span>Loading rulings…</div>';
 
@@ -571,6 +594,82 @@ function escMana(text) {
         .replace(/\{([^}]+)\}/g, (_, sym) =>
             `<span style="display:inline-block;min-width:1.2em;text-align:center;border-radius:50%;background:rgba(201,162,39,0.2);color:#c9a227;font-size:0.75em;padding:0 2px;font-weight:700;">{${sym}}</span>`
         );
+}
+
+// Fetch prices lazily when the prices tab is clicked
+document.getElementById('prices-tab-link')?.addEventListener('shown.bs.tab', async () => {
+    if (!_currentCardId) return;
+    if (_pricesCache[_currentCardId]) { renderSearchPrices(_pricesCache[_currentCardId]); return; }
+    try {
+        const base = document.querySelector('meta[name="app-base"]')?.content ?? '';
+        const res  = await fetch(`${base}/ajax/card_price_history.php?card_id=${encodeURIComponent(_currentCardId)}&days=30`);
+        const data = await res.json();
+        _pricesCache[_currentCardId] = data;
+        renderSearchPrices(data);
+    } catch {
+        document.getElementById('cardModalPrices').innerHTML = '<p style="color:#f87171;">Could not load price data.</p>';
+    }
+});
+
+function renderSearchPrices(data) {
+    const box = document.getElementById('cardModalPrices');
+    const cur = data.current;
+    const history = data.history || [];
+
+    let html = '';
+    if (cur) {
+        const fmt = v => v != null ? '$' + parseFloat(v).toFixed(2) : '<span style="color:#8899aa;">—</span>';
+        html += `<table class="table table-sm mb-3" style="color:#e8e8e8;font-size:0.85rem;">
+            <tr><td class="text-muted" style="width:110px;">USD</td>      <td><strong style="color:#c9a227;">${fmt(cur.price_usd)}</strong></td></tr>
+            <tr><td class="text-muted">USD Foil</td>  <td><strong>${fmt(cur.price_usd_foil)}</strong></td></tr>
+            <tr><td class="text-muted">EUR</td>        <td><strong>${fmt(cur.price_eur)}</strong></td></tr>
+            <tr><td class="text-muted">EUR Foil</td>  <td><strong>${fmt(cur.price_eur_foil)}</strong></td></tr>
+            <tr><td class="text-muted">MTGO Tix</td>  <td><strong>${fmt(cur.price_tix)}</strong></td></tr>
+            <tr><td class="text-muted">Updated</td>   <td style="color:#8899aa;font-size:0.8em;">${escHtml(cur.updated_at||'—')}</td></tr>
+        </table>`;
+    } else {
+        html += `<p style="color:#8899aa;">No price data available. Run <strong>Update Prices</strong> from the admin panel.</p>`;
+    }
+
+    if (history.length > 1) {
+        const prices = history.map(r => r.price_usd != null ? parseFloat(r.price_usd) : null);
+        const dates  = history.map(r => r.recorded_date);
+        const valid  = prices.filter(p => p !== null);
+        const minP   = Math.min(...valid);
+        const maxP   = Math.max(...valid);
+        const range  = maxP - minP || 1;
+        const W = 340, H = 80, pad = 6;
+
+        const pts = prices.map((p, i) => {
+            const x = pad + (i / Math.max(prices.length - 1, 1)) * (W - pad * 2);
+            const y = p !== null ? pad + ((maxP - p) / range) * (H - pad * 2) : null;
+            return { x, y, d: dates[i] };
+        }).filter(pt => pt.y !== null);
+
+        if (pts.length > 1) {
+            const polyline  = pts.map(pt => `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`).join(' ');
+            const areaBottom = H - pad;
+            const area = `${pts[0].x.toFixed(1)},${areaBottom} ` +
+                         pts.map(pt => `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`).join(' ') +
+                         ` ${pts[pts.length-1].x.toFixed(1)},${areaBottom}`;
+            const change = valid.length >= 2 ? valid[valid.length-1] - valid[0] : null;
+            const changeStr = change !== null
+                ? (change >= 0
+                    ? `<span style="color:#4ade80;">+$${change.toFixed(2)}</span>`
+                    : `<span style="color:#f87171;">-$${Math.abs(change).toFixed(2)}</span>`)
+                : '';
+
+            html += `<div class="mb-1" style="color:#8899aa;font-size:0.78rem;">USD price — last ${history.length} days ${changeStr}</div>
+            <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"
+                 style="display:block;overflow:visible;border-radius:4px;background:rgba(0,0,0,0.2);">
+                <polygon points="${area}" fill="rgba(201,162,39,0.12)" />
+                <polyline points="${polyline}" fill="none" stroke="#c9a227" stroke-width="1.5" stroke-linejoin="round" />
+                <text x="${pts[0].x}" y="${H-1}" font-size="8" fill="#8899aa" text-anchor="middle">${escHtml(dates[0])}</text>
+                <text x="${pts[pts.length-1].x}" y="${H-1}" font-size="8" fill="#8899aa" text-anchor="end">${escHtml(dates[dates.length-1])}</text>
+            </svg>`;
+        }
+    }
+    box.innerHTML = html || '<p style="color:#8899aa;">No price data.</p>';
 }
 
 // Fetch rulings lazily when the rulings tab is clicked

@@ -31,6 +31,24 @@ mysqli_stmt_bind_param($wish_stmt, "i", $user_id);
 mysqli_stmt_execute($wish_stmt);
 $wish_count = mysqli_fetch_assoc(mysqli_stmt_get_result($wish_stmt))['total'] ?? 0;
 
+// Collection value (requires card_prices table — skip gracefully if missing)
+$collection_value = null;
+$table_exists = $dbc->query("SHOW TABLES LIKE 'card_prices'")->num_rows > 0;
+if ($table_exists) {
+    $val_stmt = mysqli_prepare($dbc,
+        "SELECT SUM(cp.price_usd * uc.quantity) as total_value
+         FROM user_collection uc
+         JOIN card_prices cp ON cp.card_id = uc.card_id
+         WHERE uc.user_id = ?"
+    );
+    mysqli_stmt_bind_param($val_stmt, "i", $user_id);
+    mysqli_stmt_execute($val_stmt);
+    $val_row = mysqli_fetch_assoc(mysqli_stmt_get_result($val_stmt));
+    if ($val_row['total_value'] !== null) {
+        $collection_value = (float)$val_row['total_value'];
+    }
+}
+
 // Favorite decks — hard cap at 18 (3 rows of 2, matches 3 COTD slots)
 $fav_stmt = mysqli_prepare($dbc, "SELECT id, name, description FROM decks WHERE user_id = ? AND is_favorite = 1 ORDER BY name LIMIT 18");
 mysqli_stmt_bind_param($fav_stmt, "i", $user_id);
@@ -268,7 +286,7 @@ mysqli_close($dbc);
     </div>
 
     <!-- Stat Cards -->
-    <div class="row text-center g-4 mb-5">
+    <div class="row text-center g-4 mb-5 <?= $collection_value !== null ? 'row-cols-md-4' : 'row-cols-md-3' ?>">
         <div class="col-md-4">
             <div class="card shadow-sm h-100 stat-card-collection">
                 <div class="card-body py-4">
@@ -299,6 +317,20 @@ mysqli_close($dbc);
                 </div>
             </div>
         </div>
+        <?php if ($collection_value !== null): ?>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100" style="border-top:3px solid rgba(201,162,39,0.5);">
+                <div class="card-body py-4">
+                    <i class="bi bi-currency-dollar fs-1 mb-2 d-block" style="color:#c9a227;"></i>
+                    <h5 class="text-muted mb-1">Collection Value</h5>
+                    <p class="display-5 fw-bold mb-3" style="color:#c9a227;">
+                        $<?= number_format($collection_value, 2) ?>
+                    </p>
+                    <a href="collection.php" class="btn btn-sm btn-outline-warning">View Collection</a>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 
     <!-- Recently Added -->

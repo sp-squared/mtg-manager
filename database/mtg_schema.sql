@@ -220,7 +220,38 @@ CREATE EVENT daily_card_gap_fill
     DO CALL fill_daily_card_gaps();
 
 -- -----------------------------------------------------------------------------
--- 10. LOGIN RATE LIMITING
+-- 10. PRICE TRACKING
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS card_prices (
+    card_id        VARCHAR(50)   NOT NULL PRIMARY KEY,
+    price_usd      DECIMAL(10,2) NULL,
+    price_usd_foil DECIMAL(10,2) NULL,
+    price_eur      DECIMAL(10,2) NULL,
+    price_eur_foil DECIMAL(10,2) NULL,
+    price_tix      DECIMAL(10,2) NULL,
+    updated_at     TIMESTAMP     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS card_price_history (
+    id             BIGINT        AUTO_INCREMENT PRIMARY KEY,
+    card_id        VARCHAR(50)   NOT NULL,
+    price_usd      DECIMAL(10,2) NULL,
+    price_usd_foil DECIMAL(10,2) NULL,
+    price_eur      DECIMAL(10,2) NULL,
+    price_eur_foil DECIMAL(10,2) NULL,
+    price_tix      DECIMAL(10,2) NULL,
+    recorded_date  DATE          NOT NULL,
+    UNIQUE KEY uq_card_date (card_id, recorded_date),
+    INDEX idx_card (card_id),
+    INDEX idx_date (recorded_date),
+    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
+);
+
+-- Populate prices by running admin/update_prices.php after importing cards.
+
+-- -----------------------------------------------------------------------------
+-- 11. LOGIN RATE LIMITING
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS login_attempts (
     id           INT AUTO_INCREMENT PRIMARY KEY,
@@ -424,6 +455,34 @@ CREATE EVENT daily_card_gap_fill
 
 -- Enable event scheduler (run once as root if not already set):
 -- SET GLOBAL event_scheduler = ON;
+
+-- card_prices table (idempotent)
+CREATE TABLE IF NOT EXISTS card_prices (
+    card_id        VARCHAR(50)   NOT NULL PRIMARY KEY,
+    price_usd      DECIMAL(10,2) NULL,
+    price_usd_foil DECIMAL(10,2) NULL,
+    price_eur      DECIMAL(10,2) NULL,
+    price_eur_foil DECIMAL(10,2) NULL,
+    price_tix      DECIMAL(10,2) NULL,
+    updated_at     TIMESTAMP     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
+);
+
+-- card_price_history table (idempotent)
+CREATE TABLE IF NOT EXISTS card_price_history (
+    id             BIGINT        AUTO_INCREMENT PRIMARY KEY,
+    card_id        VARCHAR(50)   NOT NULL,
+    price_usd      DECIMAL(10,2) NULL,
+    price_usd_foil DECIMAL(10,2) NULL,
+    price_eur      DECIMAL(10,2) NULL,
+    price_eur_foil DECIMAL(10,2) NULL,
+    price_tix      DECIMAL(10,2) NULL,
+    recorded_date  DATE          NOT NULL,
+    UNIQUE KEY uq_card_date (card_id, recorded_date),
+    INDEX idx_card (card_id),
+    INDEX idx_date (recorded_date),
+    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
+);
 
 -- =============================================================================
 -- END OF SCHEMA

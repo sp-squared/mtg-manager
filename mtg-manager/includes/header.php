@@ -12,6 +12,7 @@ require_once __DIR__ . '/connect.php';   // ensures $dbc is always available bef
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>MTG Collection Manager</title>
     <meta name="csrf-token" content="<?= generateCsrfToken() ?>">
+    <meta name="app-base"   content="<?= defined('APP_BASE') ? APP_BASE : '' ?>">
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
@@ -65,6 +66,13 @@ require_once __DIR__ . '/connect.php';   // ensures $dbc is always available bef
             <?php if (isLoggedIn()): ?>
             <ul class="navbar-nav ms-auto">
                 <?php if (isAdmin()): ?>
+                <li class="nav-item">
+                    <a class="nav-link <?= $current_page === 'update_prices.php' ? 'active' : '' ?>"
+                       href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/admin/update_prices.php"
+                       style="color:#c9a227;">
+                        <i class="bi bi-currency-dollar me-1"></i>Prices
+                    </a>
+                </li>
                 <li class="nav-item">
                     <a class="nav-link <?= $current_page === 'admin_unlock.php' || basename($_SERVER['PHP_SELF']) === 'admin_unlock.php' ? 'active' : '' ?>"
                        href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/admin/admin_unlock.php"

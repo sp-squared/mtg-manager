@@ -23,9 +23,11 @@ $total_pages   = (int)ceil($total_results / $results_per_page);
 $count_stmt->close();
 
 $stmt = $dbc->prepare(
-    "SELECT w.card_id, w.priority, c.name, c.mana_cost, c.type_line, c.image_uri, c.rarity
+    "SELECT w.card_id, w.priority, c.name, c.mana_cost, c.type_line, c.image_uri, c.rarity,
+            cp.price_usd, cp.price_usd_foil
      FROM wishlist w
      JOIN cards c ON w.card_id = c.id
+     LEFT JOIN card_prices cp ON cp.card_id = w.card_id
      WHERE w.user_id = ?
      ORDER BY w.priority DESC, c.name
      LIMIT ? OFFSET ?"
@@ -63,6 +65,13 @@ while ($row = $result->fetch_assoc()):
                 <strong>Type:</strong> <?= htmlspecialchars($row['type_line']) ?><br>
                 <strong>Priority:</strong>
                 <span class="priority-<?= $pri_class ?>"><?= htmlspecialchars($pri_label) ?></span>
+                <?php if ($row['price_usd'] !== null): ?>
+                <br><strong>Price:</strong>
+                <span style="color:#c9a227;">$<?= number_format((float)$row['price_usd'], 2) ?></span>
+                <?php if ($row['price_usd_foil'] !== null): ?>
+                <span style="color:#8899aa;font-size:0.8em;"> / foil $<?= number_format((float)$row['price_usd_foil'], 2) ?></span>
+                <?php endif; ?>
+                <?php endif; ?>
             </p>
         </div>
         <div class="card-footer bg-transparent">

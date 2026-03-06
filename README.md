@@ -32,9 +32,18 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 - Deck import via shareable export codes
 - Export snapshot stored as immutable JSON with import count tracking
 
+### Price Tracking
+- Admin-run price updater pulls USD, USD Foil, EUR, EUR Foil, and MTGO Tix prices from Scryfall bulk data
+- Current prices displayed on every card in Collection, Search, and Wishlist
+- Daily snapshots stored in `card_price_history` — run the updater regularly to build price trends
+- 30-day USD sparkline chart in the Prices tab of each card detail modal
+- Collection value banner on Collection page and dashboard stat card (total USD value × quantity owned)
+- Wishlist value banner showing total buy cost for all priced wishlist cards
+
 ### Wishlist
 - Priority levels: Low / Medium / High
 - Add from search results in one click
+- Current market price shown per card
 
 ### Card of the Day
 - Daily rotating card displayed on the dashboard
@@ -55,6 +64,7 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 - Three-state login status: Locked / Logged in while locked / Unlocked
 - Bypass event tracking preserved in audit log
 - Scryfall bulk data importer (admin-only, streaming JSON parser, low memory footprint)
+- Price updater (`admin/update_prices.php`) — streams the same bulk file, updates `card_prices` and appends a daily row to `card_price_history`
 
 ### Security
 - bcrypt password hashing (32-character max enforced to stay within 72-byte bcrypt limit)
@@ -83,27 +93,32 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 ## Database Schema
 
 ### Tables
-| Table                | Purpose                                      |
-|----------------------|----------------------------------------------|
-| `player`             | User accounts with session token             |
-| `cards`              | Scryfall card data with import timestamp     |
-| `sets`               | Set metadata                                 |
-| `colors`             | W/U/B/R/G reference                          |
-| `card_colors`        | Card ↔ color junction                        |
-| `formats`            | Format names                                 |
-| `format_legalities`  | Card legality per format                     |
-| `user_collection`    | Cards owned per user with added timestamp    |
-| `wishlist`           | Wanted cards with priority                   |
-| `decks`              | Deck metadata with favorite flag             |
-| `deck_cards`         | Cards in each deck with sideboard flag       |
-| `deck_exports`       | Shareable immutable deck snapshots           |
-| `daily_cards`        | Card of the Day pile with display dates      |
-| `login_attempts`     | Rate limit audit log with bypass tracking    |
+| Table                | Purpose                                                        |
+|----------------------|----------------------------------------------------------------|
+| `player`             | User accounts with session token                               |
+| `cards`              | Scryfall card data with import timestamp                       |
+| `sets`               | Set metadata                                                   |
+| `colors`             | W/U/B/R/G reference                                           |
+| `card_colors`        | Card ↔ color junction                                         |
+| `formats`            | Format names                                                   |
+| `format_legalities`  | Card legality per format                                       |
+| `user_collection`    | Cards owned per user with added timestamp                      |
+| `wishlist`           | Wanted cards with priority                                     |
+| `decks`              | Deck metadata with favorite flag                               |
+| `deck_cards`         | Cards in each deck with sideboard flag                         |
+| `deck_exports`       | Shareable immutable deck snapshots                             |
+| `daily_cards`        | Card of the Day pile with display dates                        |
+| `login_attempts`     | Rate limit audit log with bypass tracking                      |
+| `card_prices`        | Latest USD/EUR/Tix prices per card, updated by price updater  |
+| `card_price_history` | Daily price snapshots per card for trend tracking              |
 
 ### Notable Design Decisions
 - `user_collection.added_at` — timestamps when a card was first added, enabling "Recently Added" sort
 - `cards.imported_at` — set on first Scryfall import only, enabling "Newest Import" sort; preserved across re-imports via `IFNULL(imported_at, NOW())`
 - `daily_cards` uses a recursive CTE to generate a full date series and backfill any gaps between the earliest record and `CURDATE()`
+- `card_prices` is a `PRIMARY KEY` keyed on `card_id` — upserted on every price update run, always reflects the latest known price
+- `card_price_history` uses a `UNIQUE KEY (card_id, recorded_date)` with `ON DUPLICATE KEY UPDATE` so running the updater multiple times in one day refreshes rather than duplicates today's snapshot
+- Both price tables are created automatically on first run of `admin/update_prices.php` — no migration needed for existing installs
 - All migrations use `information_schema.COLUMNS` checks wrapped in temporary stored procedures for compatibility with MySQL versions that do not support `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
 
 ---
@@ -140,6 +155,7 @@ mtg-manager-repo/               ← GitHub repo root
     │   └── footer.php
     │
     ├── ajax/                   # JSON endpoints called via fetch()
+    │   ├── card_price_history.php   ← price history + sparkline data for a card
     │   ├── add_to_collection.php
     │   ├── add_to_deck.php
     │   ├── add_to_wishlist.php
@@ -174,6 +190,7 @@ mtg-manager-repo/               ← GitHub repo root
     │
     └── admin/                  # admin-only pages (user ID 1 only)
         ├── import_scryfall.php
+        ├── update_prices.php
         └── admin_unlock.php
 ```
 
@@ -235,6 +252,8 @@ mtg-manager-repo/               ← GitHub repo root
 
 7. **Import card data** — log in, then navigate to `http://localhost/mtg-manager/admin/import_scryfall.php`. The importer streams Scryfall bulk data with low memory usage and can be re-run safely. After importing, sort Search by "Newest Import" to immediately see what was added.
 
+8. **Load prices** — navigate to `http://localhost/mtg-manager/admin/update_prices.php` and click **Start Price Update**. This streams the same Scryfall bulk file and populates `card_prices` and `card_price_history`. Run it regularly (daily or weekly) to build price trend data for the sparkline charts. The price tables are created automatically on first run.
+
 ---
 
 ## 🔍 Configuration Notes
@@ -254,7 +273,7 @@ mtg-manager-repo/               ← GitHub repo root
 - 32-character cap ensures passwords always fall within bcrypt's 72-byte processing limit, even with multibyte characters such as emoji or CJK
 
 ### SSL Certificate (Windows)
-If `admin/import_scryfall.php` cannot reach the Scryfall API, add your `cacert.pem` path to `php.ini`:
+If `admin/import_scryfall.php` or `admin/update_prices.php` cannot reach the Scryfall API, add your `cacert.pem` path to `php.ini`:
 ```ini
 curl.cainfo = "C:/path/to/cacert.pem"
 ```
