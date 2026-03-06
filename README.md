@@ -14,7 +14,7 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 
 ---
 
-## Features
+## 🌟 Key Features
 
 ### Collection Management
 - Add cards to your personal collection with quantity tracking
@@ -187,7 +187,7 @@ mtg-manager-repo/               ← GitHub repo root
 - Apache 2.4+ (tested on Windows)
 - A `cacert.pem` bundle for SSL verification (download from [curl.se](https://curl.se/ca/cacert.pem))
 
-### Installation
+### 🛠️ Installation Guide
 
 1. **Clone the repository**
    ```bash
@@ -237,7 +237,7 @@ mtg-manager-repo/               ← GitHub repo root
 
 ---
 
-## Configuration Notes
+## 🔍 Configuration Notes
 
 ### APP_BASE
 `APP_BASE` is defined in `includes/db_config.php` and controls all absolute URL redirects and nav links throughout the app. It must match the subfolder name you dropped into htdocs. Set it once and nothing else needs changing.
@@ -265,7 +265,7 @@ User ID 1 is the admin. There is no separate admin registration — simply be th
 
 ---
 
-## License
+## 📄 License
 
 MIT License
 
