@@ -15,6 +15,15 @@ $results_per_page = 52;
 $page   = isset($_POST['page']) && is_numeric($_POST['page']) ? (int)$_POST['page'] : 1;
 $offset = ($page - 1) * $results_per_page;
 
+$valid_sorts = ['priority', 'price_asc', 'price_desc'];
+$sort = isset($_POST['sort']) && in_array($_POST['sort'], $valid_sorts) ? $_POST['sort'] : 'priority';
+$sort_orders = [
+    'priority'   => 'w.priority DESC, c.name ASC',
+    'price_asc'  => 'cp.price_usd IS NULL ASC, cp.price_usd ASC, c.name ASC',
+    'price_desc' => 'cp.price_usd IS NULL ASC, cp.price_usd DESC, c.name ASC',
+];
+$sort_order = $sort_orders[$sort];
+
 $count_stmt = $dbc->prepare("SELECT COUNT(*) as total FROM wishlist WHERE user_id = ?");
 $count_stmt->bind_param("i", $user_id);
 $count_stmt->execute();
@@ -29,7 +38,7 @@ $stmt = $dbc->prepare(
      JOIN cards c ON w.card_id = c.id
      LEFT JOIN card_prices cp ON cp.card_id = w.card_id
      WHERE w.user_id = ?
-     ORDER BY w.priority DESC, c.name
+     ORDER BY {$sort_order}
      LIMIT ? OFFSET ?"
 );
 $stmt->bind_param("iii", $user_id, $results_per_page, $offset);

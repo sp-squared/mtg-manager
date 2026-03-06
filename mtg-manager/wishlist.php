@@ -11,6 +11,16 @@ if (!isLoggedIn()) {
 include __DIR__ . '/includes/connect.php';
 $user_id = getUserId();
 
+// Sort
+$valid_sorts = ['priority', 'price_asc', 'price_desc'];
+$sort = isset($_GET['sort']) && in_array($_GET['sort'], $valid_sorts) ? $_GET['sort'] : 'priority';
+$sort_orders = [
+    'priority'   => 'w.priority DESC, c.name ASC',
+    'price_asc'  => 'cp.price_usd IS NULL ASC, cp.price_usd ASC, c.name ASC',
+    'price_desc' => 'cp.price_usd IS NULL ASC, cp.price_usd DESC, c.name ASC',
+];
+$sort_order = $sort_orders[$sort];
+
 // Handle messages
 $message = '';
 if (isset($_GET['msg'])) {
@@ -34,6 +44,14 @@ if (isset($_GET['msg'])) {
 
     <div class="mb-3 d-flex align-items-center gap-3 flex-wrap">
         <a href="search.php" class="btn btn-primary">🔍 Search for Cards to Add</a>
+        <form method="get" class="d-flex align-items-center gap-2 ms-auto">
+            <label class="mb-0 small" style="color:#8899aa;white-space:nowrap;">Sort by:</label>
+            <select name="sort" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
+                <option value="priority"  <?= $sort === 'priority'  ? 'selected' : '' ?>>Priority</option>
+                <option value="price_asc" <?= $sort === 'price_asc' ? 'selected' : '' ?>>Price ↑</option>
+                <option value="price_desc"<?= $sort === 'price_desc'? 'selected' : '' ?>>Price ↓</option>
+            </select>
+        </form>
         <?php if (isset($wish_value) && $wish_value !== null): ?>
         <div class="d-flex align-items-center gap-2 px-3 py-2 rounded"
              style="background:rgba(201,162,39,0.1);border:1px solid rgba(201,162,39,0.25);">
@@ -90,7 +108,7 @@ if (isset($_GET['msg'])) {
               JOIN cards c ON w.card_id = c.id
               LEFT JOIN card_prices cp ON cp.card_id = w.card_id
               WHERE w.user_id = ?
-              ORDER BY w.priority DESC, c.name
+              ORDER BY {$sort_order}
               LIMIT ? OFFSET ?";
     $stmt = $dbc->prepare($query);
     $stmt->bind_param("iii", $user_id, $results_per_page, $offset);
@@ -214,6 +232,7 @@ function showToast(message, type = 'success') {
 async function refreshWishlistGrid(currentPage) {
     const fd = new FormData();
     fd.append('page', currentPage);
+    fd.append('sort', new URLSearchParams(window.location.search).get('sort') || 'priority');
     const res  = await fetch('ajax/wishlist_partial.php', { method: 'POST', body: fd });
     const data = await res.json();
     if (data.error) { showToast(data.error, 'danger'); return; }
