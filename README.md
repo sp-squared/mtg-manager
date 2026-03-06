@@ -1,5 +1,7 @@
 # mtg-manager
 
+![screenshot](/mtg-manager/img/logo.png)
+
 A self-hosted Magic: The Gathering collection, deck, and wishlist manager built with PHP, MySQL, and Bootstrap. Designed for local area network (LAN) deployment — run it on your own machine and share it with friends.
 
 Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No third-party account or subscription required.
