@@ -2,6 +2,7 @@
 ![screenshot](/mtg-manager/img/mtg_cards_medium.png)
 
 Create a local account and start building your collection today!
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![WOTC](https://img.shields.io/badge/WOTC-blue.svg)](https://company.wizards.com/en)
 [![Scryfall](https://img.shields.io/badge/Scryfall-blue.svg)](https://scryfall.com/docs/faqs)
