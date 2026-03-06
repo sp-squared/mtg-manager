@@ -551,6 +551,11 @@ function escMana(text) {
 
 function openCardModal(card) {
     _colCardId = card.id;
+    if (card.id) {
+        const fd = new FormData();
+        fd.append('card_id', card.id);
+        fetch('ajax/record_view.php', { method: 'POST', body: fd }).catch(() => {});
+    }
     document.getElementById('cardModalTitle').textContent = card.name;
     const img = document.getElementById('cardModalImg');
     img.src = card.image_uri || '';

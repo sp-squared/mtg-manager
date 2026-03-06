@@ -204,6 +204,34 @@ $token_stmt->execute();
 $token_cards = $token_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $token_stmt->close();
 $token_count = count($token_cards);
+
+// Missing cards — cards in deck where user owns fewer than needed (tokens excluded)
+$missing_stmt = $dbc->prepare(
+    "SELECT c.id, c.name, c.type_line, c.image_uri, c.mana_cost, c.rarity,
+            dc.quantity as needed,
+            COALESCE(uc.quantity, 0) as owned,
+            (dc.quantity - COALESCE(uc.quantity, 0)) as missing_qty,
+            cp.price_usd
+     FROM deck_cards dc
+     JOIN cards c ON c.id = dc.card_id
+     LEFT JOIN user_collection uc ON uc.card_id = dc.card_id AND uc.user_id = ?
+     LEFT JOIN card_prices cp ON cp.card_id = dc.card_id
+     WHERE dc.deck_id = ?
+       AND c.type_line NOT LIKE '%Token%'
+       AND (uc.quantity IS NULL OR uc.quantity < dc.quantity)
+     ORDER BY c.name"
+);
+$missing_stmt->bind_param("ii", $user_id, $deck_id);
+$missing_stmt->execute();
+$missing_cards = $missing_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$missing_stmt->close();
+$missing_count = count($missing_cards);
+$missing_value = 0;
+foreach ($missing_cards as $mc) {
+    if ($mc['price_usd'] !== null) {
+        $missing_value += (float)$mc['price_usd'] * (int)$mc['missing_qty'];
+    }
+}
 ?>
 
 <div class="container-fluid my-4">
@@ -747,6 +775,71 @@ $token_count = count($token_cards);
         </div>
         <?php endif; ?>
 
+        <!-- Missing Cards -->
+        <div class="col-12 mb-4">
+            <div class="card shadow-sm" style="border-top:4px solid <?= $missing_count > 0 ? '#f87171' : '#4ade80' ?>;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h5 style="color:<?= $missing_count > 0 ? '#f87171' : '#4ade80' ?>;">
+                            <i class="bi bi-<?= $missing_count > 0 ? 'exclamation-circle' : 'check-circle' ?> me-2"></i>Missing Cards
+                            <span class="badge ms-2" style="background:<?= $missing_count > 0 ? 'rgba(248,113,113,0.15)' : 'rgba(74,222,128,0.15)' ?>;color:<?= $missing_count > 0 ? '#f87171' : '#4ade80' ?>;border:1px solid <?= $missing_count > 0 ? 'rgba(248,113,113,0.4)' : 'rgba(74,222,128,0.4)' ?>;">
+                                <?= $missing_count ?>
+                            </span>
+                        </h5>
+                        <?php if ($missing_count > 0 && $missing_value > 0): ?>
+                        <span class="small" style="color:#8899aa;">
+                            Est. to complete: <strong style="color:#c9a227;">$<?= number_format($missing_value, 2) ?></strong>
+                        </span>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if ($missing_count === 0): ?>
+                        <p class="mb-0 small" style="color:#4ade80;">You own all the cards in this deck!</p>
+                    <?php else: ?>
+                        <p class="small mb-3" style="color:#8899aa;">These cards are in your deck but not in your collection (or not enough copies).</p>
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0" style="font-size:0.85rem;">
+                                <thead>
+                                    <tr style="color:#8899aa;border-bottom:1px solid rgba(255,255,255,0.1);">
+                                        <th>Card</th>
+                                        <th class="text-center">Need</th>
+                                        <th class="text-center">Own</th>
+                                        <th class="text-center">Missing</th>
+                                        <th class="text-end">Price</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($missing_cards as $mc): ?>
+                                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                        <td>
+                                            <span style="color:#e8e8e8;"><?= htmlspecialchars($mc['name']) ?></span>
+                                            <br><span class="small" style="color:#8899aa;"><?= htmlspecialchars($mc['type_line']) ?></span>
+                                        </td>
+                                        <td class="text-center" style="color:#8899aa;"><?= (int)$mc['needed'] ?></td>
+                                        <td class="text-center" style="color:#8899aa;"><?= (int)$mc['owned'] ?></td>
+                                        <td class="text-center fw-bold" style="color:#f87171;"><?= (int)$mc['missing_qty'] ?></td>
+                                        <td class="text-end" style="color:#c9a227;">
+                                            <?= $mc['price_usd'] !== null ? '$' . number_format((float)$mc['price_usd'], 2) : '—' ?>
+                                        </td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-warning add-missing-to-wishlist"
+                                                    data-card-id="<?= htmlspecialchars($mc['id']) ?>"
+                                                    data-card-name="<?= htmlspecialchars($mc['name']) ?>"
+                                                    title="Add to wishlist">
+                                                <i class="bi bi-heart"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
     </div>
     <?php endif; ?>
 
@@ -942,6 +1035,31 @@ function showToast(message, type = 'success') {
     toast.show();
     toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
 }
+
+// ── Missing Cards — Add to Wishlist ──────────────────────────────────────────
+document.querySelectorAll('.add-missing-to-wishlist').forEach(btn => {
+    btn.addEventListener('click', async function () {
+        const cardId   = this.dataset.cardId;
+        const cardName = this.dataset.cardName;
+        const fd = new FormData();
+        fd.append('card_id',  cardId);
+        fd.append('priority', '2'); // default Medium
+        try {
+            const res  = await fetch('ajax/add_to_wishlist.php', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.success) {
+                this.innerHTML = '<i class="bi bi-heart-fill"></i>';
+                this.disabled  = true;
+                showToast('Added <strong>' + cardName + '</strong> to wishlist', 'success');
+            } else {
+                showToast(data.error || 'Could not add to wishlist', 'danger');
+            }
+        } catch (_) {
+            showToast('Network error', 'danger');
+        }
+    });
+});
+// ─────────────────────────────────────────────────────────────────────────────
 </script>
 
 <?php

@@ -251,6 +251,10 @@ $dbc->close();
                                 title="Copy code">
                             <i class="bi bi-clipboard"></i>
                         </button>
+                        <a href="public_deck.php?code=<?= urlencode($ex['export_code']) ?>"
+                           class="btn btn-sm btn-outline-info" title="View public page" target="_blank">
+                            <i class="bi bi-eye"></i>
+                        </a>
                         <?php endif; ?>
                         <button class="btn btn-sm btn-outline-danger delete-export-btn"
                                 data-code="<?= htmlspecialchars($ex['export_code']) ?>"

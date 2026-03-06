@@ -58,18 +58,112 @@ $fav_rows = [];
 while ($r = mysqli_fetch_assoc($fav_result)) $fav_rows[] = $r;
 $fav_count = count($fav_rows);
 
-// Recently added (last 8 by row insertion order)
-$recent_stmt = mysqli_prepare($dbc,
-    "SELECT c.id, c.name, c.image_uri, c.rarity, c.mana_cost, s.name as set_name, uc.quantity
-     FROM user_collection uc
-     JOIN cards c ON uc.card_id = c.id
+// Recently viewed (last 8 by viewed_at, cross-page tracking)
+$dbc->query("CREATE TABLE IF NOT EXISTS recently_viewed (
+    id        INT AUTO_INCREMENT PRIMARY KEY,
+    user_id   INT NOT NULL,
+    card_id   VARCHAR(36) NOT NULL,
+    viewed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_user_card (user_id, card_id),
+    INDEX idx_user_viewed (user_id, viewed_at)
+)");
+$recent_stmt = $dbc->prepare(
+    "SELECT c.id, c.name, c.image_uri, c.rarity, c.mana_cost, s.name as set_name,
+            rv.viewed_at
+     FROM recently_viewed rv
+     JOIN cards c ON c.id = rv.card_id
      LEFT JOIN sets s ON c.set_id = s.id
-     WHERE uc.user_id = ?
-     ORDER BY uc.card_id DESC
-     LIMIT 8");
-mysqli_stmt_bind_param($recent_stmt, "i", $user_id);
-mysqli_stmt_execute($recent_stmt);
-$recent_result = mysqli_stmt_get_result($recent_stmt);
+     WHERE rv.user_id = ?
+     ORDER BY rv.viewed_at DESC
+     LIMIT 8"
+);
+$recent_stmt->bind_param("i", $user_id);
+$recent_stmt->execute();
+$recent_result = $recent_stmt->get_result();
+
+// ── Price Alerts check ────────────────────────────────────────────────────────
+$dbc->query("CREATE TABLE IF NOT EXISTS price_alerts (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    user_id       INT NOT NULL,
+    card_id       VARCHAR(36) NOT NULL,
+    target_price  DECIMAL(10,2) NOT NULL,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    triggered_at  DATETIME NULL,
+    is_active     TINYINT(1) NOT NULL DEFAULT 1,
+    INDEX idx_user_active (user_id, is_active),
+    UNIQUE KEY uq_user_card (user_id, card_id)
+)");
+$triggered_alerts = [];
+$pa_stmt = $dbc->prepare(
+    "SELECT pa.id, pa.target_price, c.name, cp.price_usd
+     FROM price_alerts pa
+     JOIN cards c ON c.id = pa.card_id
+     LEFT JOIN card_prices cp ON cp.card_id = pa.card_id
+     WHERE pa.user_id = ? AND pa.is_active = 1
+       AND cp.price_usd IS NOT NULL
+       AND cp.price_usd <= pa.target_price"
+);
+$pa_stmt->bind_param("i", $user_id);
+$pa_stmt->execute();
+$triggered_alerts = $pa_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$pa_stmt->close();
+
+// Mark triggered alerts as inactive
+if (!empty($triggered_alerts)) {
+    $ids = implode(',', array_map('intval', array_column($triggered_alerts, 'id')));
+    $dbc->query("UPDATE price_alerts SET is_active=0, triggered_at=NOW() WHERE id IN ($ids)");
+}
+
+// ── Collection Value History ──────────────────────────────────────────────────
+$dbc->query("CREATE TABLE IF NOT EXISTS collection_value_history (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    user_id      INT NOT NULL,
+    recorded_date DATE NOT NULL,
+    total_value  DECIMAL(12,2) NOT NULL DEFAULT 0,
+    priced_count INT NOT NULL DEFAULT 0,
+    total_cards  INT NOT NULL DEFAULT 0,
+    UNIQUE KEY uq_user_date (user_id, recorded_date),
+    INDEX idx_user_history (user_id, recorded_date)
+)");
+
+// Record today's snapshot (once per day — ON DUPLICATE KEY ignores repeats)
+if ($collection_value !== null) {
+    $hist_val_stmt = $dbc->prepare(
+        "SELECT SUM(cp.price_usd * uc.quantity) as tv,
+                COUNT(cp.card_id) as pc,
+                SUM(uc.quantity) as tc
+         FROM user_collection uc
+         JOIN card_prices cp ON cp.card_id = uc.card_id
+         WHERE uc.user_id = ?"
+    );
+    $hist_val_stmt->bind_param("i", $user_id);
+    $hist_val_stmt->execute();
+    $hrow = $hist_val_stmt->get_result()->fetch_assoc();
+    $hist_val_stmt->close();
+
+    $snap_value  = round((float)($hrow['tv'] ?? 0), 2);
+    $snap_priced = (int)($hrow['pc'] ?? 0);
+    $snap_total  = (int)($hrow['tc'] ?? 0);
+
+    $snap_stmt = $dbc->prepare(
+        "INSERT INTO collection_value_history (user_id, recorded_date, total_value, priced_count, total_cards)
+         VALUES (?, CURDATE(), ?, ?, ?)
+         ON DUPLICATE KEY UPDATE total_value=VALUES(total_value), priced_count=VALUES(priced_count), total_cards=VALUES(total_cards)"
+    );
+    $snap_stmt->bind_param("idii", $user_id, $snap_value, $snap_priced, $snap_total);
+    $snap_stmt->execute();
+    $snap_stmt->close();
+}
+
+// Fetch last 30 days of history
+$hist_stmt = $dbc->prepare(
+    "SELECT recorded_date, total_value FROM collection_value_history
+     WHERE user_id = ? ORDER BY recorded_date ASC LIMIT 30"
+);
+$hist_stmt->bind_param("i", $user_id);
+$hist_stmt->execute();
+$hist_rows = $hist_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$hist_stmt->close();
 
 // ── Daily Cards pile ──────────────────────────────────────────────────────────
 // Auto-create table if it doesn't exist
@@ -172,6 +266,26 @@ mysqli_close($dbc);
 ?>
 
 <div class="container my-4">
+
+    <?php if (!empty($triggered_alerts)): ?>
+    <div class="alert alert-warning alert-dismissible fade show mb-4" style="border-color:rgba(201,162,39,0.4);background:rgba(201,162,39,0.08);">
+        <strong style="color:#c9a227;"><i class="bi bi-bell-fill me-2"></i>Price Alert<?= count($triggered_alerts) > 1 ? 's' : '' ?> Triggered!</strong>
+        <ul class="mb-1 mt-2">
+        <?php foreach ($triggered_alerts as $ta): ?>
+            <li style="color:#e8e8e8;">
+                <strong><?= htmlspecialchars($ta['name']) ?></strong> is now
+                <strong style="color:#4ade80;">$<?= number_format((float)$ta['price_usd'], 2) ?></strong>
+                — at or below your target of <strong>$<?= number_format((float)$ta['target_price'], 2) ?></strong>
+            </li>
+        <?php endforeach; ?>
+        </ul>
+        <a href="price_alerts.php" class="btn btn-sm btn-outline-warning mt-1">
+            <i class="bi bi-bell me-1"></i>Manage Alerts
+        </a>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <?php endif; ?>
+
     <h1 class="text-center mb-5" style="color:#c9a227; text-shadow: 0 0 16px rgba(201,162,39,0.4);">
         Welcome, <?= htmlspecialchars(getCurrentUser()) ?>!
     </h1>
@@ -333,12 +447,24 @@ mysqli_close($dbc);
         <?php endif; ?>
     </div>
 
-    <!-- Recently Added -->
-    <?php if (mysqli_num_rows($recent_result) > 0): ?>
+    <!-- Collection Value History Chart -->
+    <?php if (count($hist_rows) >= 2): ?>
     <div class="mb-5">
-        <h2 class="mb-3" style="color:#c9a227;"><i class="bi bi-clock-history me-2"></i>Recently Added</h2>
+        <h2 class="mb-3" style="color:#c9a227;"><i class="bi bi-graph-up me-2"></i>Collection Value History</h2>
+        <div class="card shadow-sm" style="border-top:3px solid rgba(201,162,39,0.5);">
+            <div class="card-body py-3">
+                <canvas id="valueHistoryChart" height="90"></canvas>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- Recently Viewed -->
+    <?php if ($recent_result->num_rows > 0): ?>
+    <div class="mb-5">
+        <h2 class="mb-3" style="color:#c9a227;"><i class="bi bi-eye me-2"></i>Recently Viewed</h2>
         <div class="row row-cols-2 row-cols-sm-4 row-cols-md-8 g-3">
-            <?php while ($rc = mysqli_fetch_assoc($recent_result)):
+            <?php while ($rc = $recent_result->fetch_assoc()):
                 $r = $rc['rarity'] ?? 'common';
             ?>
                 <div class="col">
@@ -357,6 +483,9 @@ mysqli_close($dbc);
                         <div class="card-body p-1">
                             <p class="small mb-0 text-truncate" title="<?= htmlspecialchars($rc['name']) ?>">
                                 <?= htmlspecialchars($rc['name']) ?>
+                            </p>
+                            <p class="mb-0" style="font-size:0.65rem;color:#8899aa;">
+                                <?= date('M j', strtotime($rc['viewed_at'])) ?>
                             </p>
                         </div>
                     </div>
@@ -405,6 +534,11 @@ function escMana(text) {
 }
 
 function openCardModal(card) {
+    if (card.id) {
+        const fd = new FormData();
+        fd.append('card_id', card.id);
+        fetch('ajax/record_view.php', { method: 'POST', body: fd }).catch(() => {});
+    }
     document.getElementById('cardModalTitle').textContent = card.name;
     const img = document.getElementById('cardModalImg');
     img.src   = card.image_uri || '';
@@ -462,6 +596,55 @@ function syncCotdHeight() {
 }
 window.addEventListener('load', syncCotdHeight);
 window.addEventListener('resize', syncCotdHeight);
+
+<?php if (count($hist_rows) >= 2): ?>
+// ── Collection Value History Chart ────────────────────────────────────────────
+(function() {
+    const labels = <?= json_encode(array_map(fn($r) => date('M j', strtotime($r['recorded_date'])), $hist_rows)) ?>;
+    const values = <?= json_encode(array_map(fn($r) => (float)$r['total_value'], $hist_rows)) ?>;
+    const ctx = document.getElementById('valueHistoryChart');
+    if (!ctx) return;
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Collection Value ($)',
+                data: values,
+                borderColor: '#c9a227',
+                backgroundColor: 'rgba(201,162,39,0.1)',
+                borderWidth: 2,
+                pointRadius: values.length <= 10 ? 4 : 2,
+                pointBackgroundColor: '#c9a227',
+                tension: 0.3,
+                fill: true,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => '$' + ctx.parsed.y.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
+                    }
+                }
+            },
+            scales: {
+                x: { ticks: { color: '#8899aa', maxTicksLimit: 10 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                y: {
+                    ticks: {
+                        color: '#8899aa',
+                        callback: v => '$' + v.toLocaleString()
+                    },
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    beginAtZero: false,
+                }
+            }
+        }
+    });
+})();
+<?php endif; ?>
 </script>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>

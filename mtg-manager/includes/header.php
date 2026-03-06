@@ -19,6 +19,8 @@ require_once __DIR__ . '/connect.php';   // ensures $dbc is always available bef
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/style.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <?php $current_page = basename($_SERVER['PHP_SELF']); ?>
@@ -50,6 +52,14 @@ require_once __DIR__ . '/connect.php';   // ensures $dbc is always available bef
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?= $current_page === 'import_deck.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/import_deck.php">Import Deck</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= $current_page === 'bulk_import.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/bulk_import.php">Bulk Import</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= $current_page === 'price_alerts.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/price_alerts.php">
+                            <i class="bi bi-bell me-1"></i>Alerts
+                        </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?= $current_page === 'profile.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/profile.php">Profile</a>

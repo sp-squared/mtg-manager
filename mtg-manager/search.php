@@ -528,6 +528,11 @@ let _pricesCache   = {};
 
 function openCardModal(card) {
     _currentCardId = card.id;
+    if (card.id) {
+        const fd = new FormData();
+        fd.append('card_id', card.id);
+        fetch('ajax/record_view.php', { method: 'POST', body: fd }).catch(() => {});
+    }
     document.getElementById('cardModalTitle').textContent = card.name;
 
     const img = document.getElementById('cardModalImg');
