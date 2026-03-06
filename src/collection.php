@@ -127,6 +127,7 @@ $where = "WHERE " . implode(' AND ', $conditions);
 
 // Sort
 $sort_options = [
+    'added'    => 'uc.added_at DESC, c.name ASC',
     'name'     => 'c.name ASC',
     'cmc_asc'  => 'c.cmc ASC, c.name ASC',
     'cmc_desc' => 'c.cmc DESC, c.name ASC',
@@ -135,7 +136,7 @@ $sort_options = [
     'qty_desc' => 'uc.quantity DESC, c.name ASC',
     'newest'   => 'c.imported_at DESC, c.name ASC',
 ];
-$sort_key   = $_GET['sort'] ?? 'name';
+$sort_key   = $_GET['sort'] ?? 'added';
 $order_by   = $sort_options[$sort_key] ?? $sort_options['name'];
 
 // Strip empty params from pagination URLs
@@ -260,7 +261,7 @@ $result = $stmt->get_result();
                                 $checked = in_array($code, $selected_colors) ? 'checked' : '';
                             ?>
                             <div class="form-check form-check-inline m-0">
-                                <input class="form-check-input" type="checkbox" name="colors[]"
+                                <input class="form-check-input" class="form-check-input color-checkbox" type="checkbox" name="colors[]"
                                        value="<?= $code ?>" id="col_<?= $code ?>" <?= $checked ?>>
                                 <label class="form-check-label d-flex align-items-center gap-1" for="col_<?= $code ?>">
                                     <span style="display:inline-flex;align-items:center;justify-content:center;
@@ -272,7 +273,7 @@ $result = $stmt->get_result();
                             </div>
                             <?php endforeach; ?>
                             <div class="form-check form-check-inline m-0">
-                                <input class="form-check-input" type="checkbox" name="colorless" value="1"
+                                <input class="form-check-input" type="checkbox" name="colorless" value="1" onchange="toggleColorless(this)"
                                        id="col_colorless" <?= !empty($_GET['colorless']) ? 'checked' : '' ?>>
                                 <label class="form-check-label small" for="col_colorless">Colorless only</label>
                             </div>
@@ -294,7 +295,8 @@ $result = $stmt->get_result();
                     <div class="ms-auto d-flex align-items-center gap-2">
                         <label class="form-label mb-0 text-nowrap small">Sort by</label>
                         <select class="form-select form-select-sm" name="sort" style="width:auto;" onchange="this.form.submit()">
-                            <option value="name"     <?= ($_GET['sort']??'name')==='name'    ?'selected':'' ?>>Name A–Z</option>
+                            <option value="added"    <?= ($_GET['sort']??'added')==='added'   ?'selected':'' ?>>Recently Added</option>
+                            <option value="name"     <?= ($_GET['sort']??'added')==='name'    ?'selected':'' ?>>Name A–Z</option>
                             <option value="cmc_asc"  <?= ($_GET['sort']??'')==='cmc_asc'  ?'selected':'' ?>>CMC ↑</option>
                             <option value="cmc_desc" <?= ($_GET['sort']??'')==='cmc_desc' ?'selected':'' ?>>CMC ↓</option>
                             <option value="rarity"   <?= ($_GET['sort']??'')==='rarity'   ?'selected':'' ?>>Rarity</option>
@@ -434,6 +436,35 @@ $result = $stmt->get_result();
     </div>
 </div>
 
+<script>
+function toggleColorless(cb) {
+    var colorBoxes = document.querySelectorAll('.color-checkbox');
+    var colorWrappers = document.querySelectorAll('.color-option');
+    if (cb.checked) {
+        colorBoxes.forEach(function(el) {
+            el.checked = false;
+            el.disabled = true;
+        });
+        colorWrappers.forEach(function(el) {
+            el.style.opacity = '0.4';
+            el.style.pointerEvents = 'none';
+        });
+    } else {
+        colorBoxes.forEach(function(el) {
+            el.disabled = false;
+        });
+        colorWrappers.forEach(function(el) {
+            el.style.opacity = '';
+            el.style.pointerEvents = '';
+        });
+    }
+}
+// Apply on page load if colorless is already checked (e.g. back button / pre-filled)
+(function() {
+    var cb = document.getElementById('colorless');
+    if (cb && cb.checked) toggleColorless(cb);
+})();
+</script>
 <script>
 // Strip empty fields before form submits so the URL stays clean
 (function () {

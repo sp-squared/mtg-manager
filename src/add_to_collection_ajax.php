@@ -32,7 +32,7 @@ if ($check->num_rows == 0) {
 $check->close();
 
 // Insert or update
-$stmt = $dbc->prepare("INSERT INTO user_collection (user_id, card_id, quantity) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE quantity = quantity + ?");
+$stmt = $dbc->prepare("INSERT INTO user_collection (user_id, card_id, quantity, added_at) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE quantity = quantity + ?, added_at = IFNULL(added_at, NOW())");
 $stmt->bind_param("isii", $user_id, $card_id, $quantity, $quantity);
 $stmt->execute();
 

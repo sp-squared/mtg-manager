@@ -138,7 +138,7 @@ $sort_options = [
     'set'      => 's.name ASC, c.name ASC',
     'newest'   => 'c.imported_at DESC, c.name ASC',
 ];
-$sort_key = $_GET['sort'] ?? 'name';
+$sort_key = $_GET['sort'] ?? 'newest';
 $order_by = $sort_options[$sort_key] ?? $sort_options['name'];
 
 // Count total
@@ -251,8 +251,8 @@ $results = $stmt->get_result();
                                 $pip_colors = ['W'=>'#f9f1d8','U'=>'#1a6bbd','B'=>'#2a2a2a','R'=>'#c0392b','G'=>'#1a7a3c'];
                                 $pip_text   = ['W'=>'#1a1a1a','U'=>'#fff','B'=>'#e8e8e8','R'=>'#fff','G'=>'#fff'];
                             ?>
-                            <div class="form-check form-check-inline m-0">
-                                <input class="form-check-input" type="checkbox" name="colors[]"
+                            <div class="form-check form-check-inline m-0 color-option">
+                                <input class="form-check-input color-checkbox" type="checkbox" name="colors[]"
                                        value="<?= $code ?>" id="color_<?= $code ?>" <?= $checked ?>>
                                 <label class="form-check-label d-flex align-items-center gap-1" for="color_<?= $code ?>">
                                     <span style="display:inline-flex;align-items:center;justify-content:center;
@@ -267,7 +267,7 @@ $results = $stmt->get_result();
                             <!-- Colorless -->
                             <div class="form-check form-check-inline m-0">
                                 <input class="form-check-input" type="checkbox" name="colorless" value="1"
-                                       id="colorless" <?= !empty($_GET['colorless']) ? 'checked' : '' ?>>
+                                       id="colorless" <?= !empty($_GET['colorless']) ? 'checked' : '' ?> onchange="toggleColorless(this)">
                                 <label class="form-check-label small" for="colorless">Colorless only</label>
                             </div>
 
@@ -291,12 +291,12 @@ $results = $stmt->get_result();
                     <div class="ms-auto d-flex align-items-center gap-2">
                         <label class="form-label mb-0 text-nowrap small">Sort by</label>
                         <select class="form-select form-select-sm" name="sort" style="width:auto;" onchange="this.form.submit()">
-                            <option value="name"     <?= ($_GET['sort']??'name')==='name'     ?'selected':'' ?>>Name</option>
+                            <option value="newest"   <?= ($_GET['sort']??'newest')==='newest'   ?'selected':'' ?>>Newest Import</option>
+                            <option value="name"     <?= ($_GET['sort']??'newest')==='name'     ?'selected':'' ?>>Name</option>
                             <option value="cmc_asc"  <?= ($_GET['sort']??'')==='cmc_asc'  ?'selected':'' ?>>CMC ↑</option>
                             <option value="cmc_desc" <?= ($_GET['sort']??'')==='cmc_desc' ?'selected':'' ?>>CMC ↓</option>
                             <option value="rarity"   <?= ($_GET['sort']??'')==='rarity'   ?'selected':'' ?>>Rarity</option>
                             <option value="set"      <?= ($_GET['sort']??'')==='set'      ?'selected':'' ?>>Set</option>
-                            <option value="newest"   <?= ($_GET['sort']??'')==='newest'   ?'selected':'' ?>>Newest Import</option>
                         </select>
                     </div>
                 </div>
@@ -452,6 +452,35 @@ $results = $stmt->get_result();
     </div>
 </div>
 
+<script>
+function toggleColorless(cb) {
+    var colorBoxes = document.querySelectorAll('.color-checkbox');
+    var colorWrappers = document.querySelectorAll('.color-option');
+    if (cb.checked) {
+        colorBoxes.forEach(function(el) {
+            el.checked = false;
+            el.disabled = true;
+        });
+        colorWrappers.forEach(function(el) {
+            el.style.opacity = '0.4';
+            el.style.pointerEvents = 'none';
+        });
+    } else {
+        colorBoxes.forEach(function(el) {
+            el.disabled = false;
+        });
+        colorWrappers.forEach(function(el) {
+            el.style.opacity = '';
+            el.style.pointerEvents = '';
+        });
+    }
+}
+// Apply on page load if colorless is already checked (e.g. back button / pre-filled)
+(function() {
+    var cb = document.getElementById('colorless');
+    if (cb && cb.checked) toggleColorless(cb);
+})();
+</script>
 <script>
 // Strip empty fields before form submits so the URL stays clean
 (function () {
