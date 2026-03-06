@@ -172,7 +172,7 @@ $running = ($_SERVER['REQUEST_METHOD'] === 'POST');
 
 <div class="container my-4" style="max-width:760px;">
     <div class="d-flex align-items-center gap-3 mb-4">
-        <a href="dashboard.php" class="btn btn-sm btn-outline-secondary">← Dashboard</a>
+        <a href="../dashboard.php" class="btn btn-sm btn-outline-secondary">← Dashboard</a>
         <h1 class="mb-0" style="color:#c9a227;">
             <i class="bi bi-cloud-download me-2"></i>Import Scryfall Data
         </h1>
@@ -416,7 +416,7 @@ $dbc->close();
 ?>
         </div>
         <div class="card-footer bg-transparent">
-            <a href="dashboard.php" class="btn btn-sm btn-outline-primary">← Back to Dashboard</a>
+            <a href="../dashboard.php" class="btn btn-sm btn-outline-primary">← Back to Dashboard</a>
             <a href="import_scryfall.php" class="btn btn-sm btn-outline-warning ms-2">Run Again</a>
         </div>
     </div>
