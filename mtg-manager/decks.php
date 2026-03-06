@@ -58,7 +58,7 @@ if (isset($_GET['msg'])) {
 
     <?php
     // Fetch decks including is_favorite
-    $stmt = $dbc->prepare("SELECT d.id, d.name, d.description, d.created_at, d.updated_at, d.is_favorite, COUNT(dc.card_id) as unique_count, COALESCE(SUM(dc.quantity), 0) as total_count FROM decks d LEFT JOIN deck_cards dc ON dc.deck_id = d.id WHERE d.user_id = ? GROUP BY d.id ORDER BY d.created_at DESC");
+    $stmt = $dbc->prepare("SELECT d.id, d.name, d.description, d.created_at, d.updated_at, d.is_favorite, COUNT(IF(c.type_line NOT LIKE '%Token%', dc.card_id, NULL)) as unique_count, COALESCE(SUM(IF(c.type_line NOT LIKE '%Token%', dc.quantity, 0)), 0) as total_count FROM decks d LEFT JOIN deck_cards dc ON dc.deck_id = d.id LEFT JOIN cards c ON c.id = dc.card_id WHERE d.user_id = ? GROUP BY d.id ORDER BY d.created_at DESC");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $decks = $stmt->get_result();
