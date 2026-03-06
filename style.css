@@ -1,0 +1,125 @@
+/* Custom overrides for MTG Collection Manager */
+
+/* ── Rarity border accents ── */
+.rarity-common   { border-top: 4px solid #adb5bd !important; } /* grey   */
+.rarity-uncommon { border-top: 4px solid #6ea8fe !important; } /* silver-blue */
+.rarity-rare     { border-top: 4px solid #ffd700 !important; } /* gold   */
+.rarity-mythic   { border-top: 4px solid #e8651a !important; } /* orange */
+
+/* ── Rarity badge pills ── */
+.badge-rarity-common   { background-color: #6c757d; color: #fff; }
+.badge-rarity-uncommon { background-color: #4a90d9; color: #fff; }
+.badge-rarity-rare     { background-color: #c9a227; color: #fff; }
+.badge-rarity-mythic   { background: linear-gradient(90deg, #c0392b, #e8651a); color: #fff; }
+body {
+    background: linear-gradient(135deg, #0d0d1a 0%, #1a1a2e 40%, #16213e 70%, #0f1923 100%);
+    min-height: 100vh;
+    color: #e8e8e8;
+}
+
+/* Optional: keep your card hover effect */
+.card:hover {
+    transform: translateY(-3px) scale(1.01);
+    box-shadow: 0 0 18px 3px rgba(212, 175, 55, 0.45), 0 6px 20px rgba(0,0,0,0.4) !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Rarity-specific glow on hover */
+.rarity-mythic:hover  { box-shadow: 0 0 20px 4px rgba(232, 101, 26, 0.6), 0 6px 20px rgba(0,0,0,0.4) !important; }
+.rarity-rare:hover    { box-shadow: 0 0 20px 4px rgba(212, 175, 55, 0.6), 0 6px 20px rgba(0,0,0,0.4) !important; }
+.rarity-uncommon:hover{ box-shadow: 0 0 16px 3px rgba(110, 168, 254, 0.5), 0 6px 20px rgba(0,0,0,0.4) !important; }
+.rarity-common:hover  { box-shadow: 0 0 14px 2px rgba(173, 181, 189, 0.4), 0 6px 20px rgba(0,0,0,0.4) !important; }
+
+/* Priority colors */
+.priority-high { color: red; font-weight: bold; }
+.priority-medium { color: orange; }
+.priority-low { color: green; }
+
+/* Toast container z-index */
+#toast-container {
+    z-index: 1100;
+}
+
+/* Footer styles (if any) */
+footer {
+    text-align: center;
+    padding: 20px;
+    margin-top: 40px;
+}
+
+.priority-high { color: #dc3545; font-weight: bold; }  /* Bootstrap danger */
+.priority-medium { color: #fd7e14; }                    /* Bootstrap orange/warning */
+.priority-low { color: #198754; }                       /* Bootstrap success */
+/* ── MTG Navbar ── */
+.navbar-mtg {
+    background: linear-gradient(90deg, #0d0d1a 0%, #1c1c3a 50%, #0d0d1a 100%);
+    border-bottom: 2px solid #c9a227;
+}
+.navbar-mtg .navbar-brand {
+    color: #c9a227 !important;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 10px rgba(201,162,39,0.5);
+}
+.navbar-mtg .nav-link        { color: #ccd6f6 !important; transition: color 0.15s; }
+.navbar-mtg .nav-link:hover  { color: #c9a227 !important; }
+.navbar-mtg .nav-link.active {
+    color: #c9a227 !important;
+    font-weight: 600;
+    border-bottom: 2px solid #c9a227;
+}
+
+/* ── Card glass effect on dark bg ── */
+.card {
+    background: rgba(22, 27, 45, 0.92) !important;
+    border: 1px solid rgba(201,162,39,0.15) !important;
+    color: #e8e8e8 !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card .text-muted { color: #8899aa !important; }
+.card-footer.bg-transparent { border-top: 1px solid rgba(201,162,39,0.15) !important; }
+
+/* ── Form controls on dark bg ── */
+.form-control, .form-select {
+    background-color: #1a1f35 !important;
+    border-color: #2e3a5a !important;
+    color: #e8e8e8 !important;
+}
+.form-control::placeholder {
+    color: #8fadc7 !important;
+    opacity: 1;
+}
+.form-control:focus, .form-select:focus {
+    background-color: #1a1f35 !important;
+    border-color: #c9a227 !important;
+    box-shadow: 0 0 0 0.2rem rgba(201,162,39,0.25) !important;
+    color: #e8e8e8 !important;
+}
+.form-label { color: #ccd6f6 !important; }
+
+/* ── Stat cards (dashboard / profile) ── */
+.stat-card-collection { border-top: 4px solid #0d6efd !important; }
+.stat-card-decks       { border-top: 4px solid #198754 !important; }
+.stat-card-wishlist    { border-top: 4px solid #c9a227 !important; }
+
+/* ── Alert override ── */
+.alert-info { background: rgba(13,110,253,0.15); border-color: #0d6efd; color: #9ec5fe; }
+.alert-success { background: rgba(25,135,84,0.15); border-color: #198754; color: #75b798; }
+
+/* ── List group on dark bg ── */
+.list-group-item {
+    background-color: rgba(22,27,45,0.85) !important;
+    border-color: rgba(201,162,39,0.15) !important;
+    color: #e8e8e8 !important;
+}
+.list-group-item-action:hover { background-color: rgba(201,162,39,0.12) !important; color: #c9a227 !important; }
+
+/* ── Modal on dark bg ── */
+.modal-content {
+    background: #13162a !important;
+    border: 1px solid rgba(201,162,39,0.3) !important;
+    color: #e8e8e8 !important;
+}
+.modal-header { border-bottom: 1px solid rgba(201,162,39,0.2) !important; }
+.modal-footer { border-top:    1px solid rgba(201,162,39,0.2) !important; }
+.btn-close { filter: invert(1); }
