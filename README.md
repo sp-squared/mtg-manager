@@ -23,14 +23,19 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 - Full-text search by card name, oracle text, keyword, or type line
 - Search by Scryfall UUID for exact card lookup
 - Color identity filter with colorless toggle (greys out colour options when selected)
+- **Bulk Import** — paste a card list in MTGO/Arena format (`4 Lightning Bolt`, `4x Bolt`, or plain `Bolt`) to add cards in bulk; lines starting with `//` or `#` are treated as comments
+- **Collection Value History** — daily snapshot of your total collection value recorded on each dashboard visit; displayed as a line chart on the dashboard once two or more days of data exist
 
 ### Deck Builder
 - Create and manage multiple decks
 - Add cards directly from search results to a deck in one step (bypasses collection ownership check for import-first workflows)
 - Sideboard support
+- Token card support — tokens are imported from Scryfall and tracked separately from the main deck count; displayed in their own panel in the Deck Summary
 - Favorite up to 18 decks (pinned to dashboard)
 - Deck import via shareable export codes
 - Export snapshot stored as immutable JSON with import count tracking
+- **Public Deck Pages** — every export code has a public read-only URL (`public_deck.php?code=MTG-XXXXXXXX`) viewable without an account; linked from the Profile export list
+- **Missing Cards** — Deck Summary panel compares deck contents against your collection and lists every card you still need, with quantity shortfall, current price, and a one-click "Add to Wishlist" button
 
 ### Price Tracking
 - Admin-run price updater pulls USD, USD Foil, EUR, EUR Foil, and MTGO Tix prices from Scryfall bulk data
@@ -44,6 +49,8 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 - Priority levels: Low / Medium / High
 - Add from search results in one click
 - Current market price shown per card
+- Sort by priority, price ascending, or price descending
+- **Price Alerts** — set a target USD price per card; the dashboard shows a notification banner the next time you log in if the price has dropped to or below your target
 
 ### Card of the Day
 - Daily rotating card displayed on the dashboard
@@ -51,10 +58,15 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 - MySQL scheduled event fires nightly at midnight even with no active users
 - Fully database-driven, no PHP date logic
 
+### Recently Viewed
+- Replaces "Recently Added" on the dashboard
+- Tracks the last 8 cards opened in a modal across Search, Collection, and the dashboard
+- Recorded via a fire-and-forget AJAX call on every card modal open; stored in `recently_viewed` with a per-user unique constraint so only the most recent visit time is kept per card
+
 ### Search
 - Filter by name, type line, oracle text, keyword/ability, set, rarity, CMC range, color identity
 - Color mode: Any / All / Exactly
-- Sort by: Newest Import, Name, CMC ↑↓, Rarity, Set
+- Sort by: Newest Import, Name, CMC ↑↓, Rarity, Set, Price ↑↓
 - Clean URLs — empty parameters stripped from query string
 - Scryfall UUID search for direct card lookup
 - Default sort is Newest Import so freshly imported cards are immediately visible
@@ -63,7 +75,8 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 - Admin panel for rate limit management (user ID 1 is admin)
 - Three-state login status: Locked / Logged in while locked / Unlocked
 - Bypass event tracking preserved in audit log
-- Scryfall bulk data importer (admin-only, streaming JSON parser, low memory footprint)
+- Scryfall bulk data importer (admin-only, streaming JSON parser, low memory footprint) — accessible via the **Import** navbar link
+- Token cards included in the Scryfall import (art series, vanguard, scheme, and emblems are still skipped)
 - Price updater (`admin/update_prices.php`) — streams the same bulk file, updates `card_prices` and appends a daily row to `card_price_history`
 
 ### Security
@@ -80,13 +93,13 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 
 ## Tech Stack
 
-| Layer      | Technology                              |
-|------------|-----------------------------------------|
-| Backend    | PHP 7.4+ (mbstring not required)        |
-| Database   | MySQL 8.0+ (recursive CTE required)     |
-| Frontend   | Bootstrap 5, Bootstrap Icons            |
-| Card Data  | Scryfall Bulk Data API                  |
-| Server     | Apache (tested on Windows / Apache 2.4) |
+| Layer      | Technology                                        |
+|------------|---------------------------------------------------|
+| Backend    | PHP 7.4+ (mbstring not required)                  |
+| Database   | MySQL 8.0+ (recursive CTE required)               |
+| Frontend   | Bootstrap 5, Bootstrap Icons, Chart.js 4.4        |
+| Card Data  | Scryfall Bulk Data API                            |
+| Server     | Apache (tested on Windows / Apache 2.4)           |
 
 ---
 
@@ -111,6 +124,9 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 | `login_attempts`     | Rate limit audit log with bypass tracking                      |
 | `card_prices`        | Latest USD/EUR/Tix prices per card, updated by price updater  |
 | `card_price_history` | Daily price snapshots per card for trend tracking              |
+| `recently_viewed`    | Per-user card view history (upserted on each modal open)       |
+| `collection_value_history` | Daily total collection value snapshots per user          |
+| `price_alerts`       | Per-user target prices; marked triggered when price is hit     |
 
 ### Notable Design Decisions
 - `user_collection.added_at` — timestamps when a card was first added, enabling "Recently Added" sort
@@ -119,6 +135,10 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 - `card_prices` is a `PRIMARY KEY` keyed on `card_id` — upserted on every price update run, always reflects the latest known price
 - `card_price_history` uses a `UNIQUE KEY (card_id, recorded_date)` with `ON DUPLICATE KEY UPDATE` so running the updater multiple times in one day refreshes rather than duplicates today's snapshot
 - Both price tables are created automatically on first run of `admin/update_prices.php` — no migration needed for existing installs
+- `recently_viewed` uses a `UNIQUE KEY (user_id, card_id)` with `ON DUPLICATE KEY UPDATE viewed_at = NOW()` — one row per user/card pair, always reflects the most recent view time
+- `collection_value_history` uses a `UNIQUE KEY (user_id, recorded_date)` with `ON DUPLICATE KEY UPDATE` — snapshot recorded on dashboard visit, refreshed if visited again the same day
+- `price_alerts` uses a `UNIQUE KEY (user_id, card_id)` so setting a new target for the same card replaces the old one; `is_active` is set to 0 and `triggered_at` recorded when the condition is first met
+- New tables (`recently_viewed`, `collection_value_history`, `price_alerts`) are created automatically via `CREATE TABLE IF NOT EXISTS` on first page load — no manual migration required
 - All migrations use `information_schema.COLUMNS` checks wrapped in temporary stored procedures for compatibility with MySQL versions that do not support `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
 
 ---
@@ -136,7 +156,7 @@ mtg-manager-repo/               ← GitHub repo root
 └── mtg-manager/                ← drop this entire folder into htdocs/
     ├── index.php               # login
     ├── portal.php              # register
-    ├── dashboard.php
+    ├── dashboard.php           # home — stat cards, COTD, recently viewed, value history chart, price alert banner
     ├── search.php
     ├── collection.php
     ├── wishlist.php
@@ -144,6 +164,9 @@ mtg-manager-repo/               ← GitHub repo root
     ├── deck_editor.php
     ├── profile.php
     ├── import_deck.php
+    ├── bulk_import.php         # paste MTGO/Arena card list to add cards in bulk
+    ├── public_deck.php         # public read-only deck view via export code (no login required)
+    ├── price_alerts.php        # manage price drop alerts per card
     ├── style.css
     │
     ├── includes/               # shared PHP — not directly browser-accessible
@@ -155,7 +178,10 @@ mtg-manager-repo/               ← GitHub repo root
     │   └── footer.php
     │
     ├── ajax/                   # JSON endpoints called via fetch()
-    │   ├── card_price_history.php   ← price history + sparkline data for a card
+    │   ├── card_price_history.php      ← price history + sparkline data for a card
+    │   ├── card_autocomplete.php       ← card name search for price alerts
+    │   ├── bulk_import_collection.php  ← parses and imports a pasted card list
+    │   ├── record_view.php             ← upserts recently_viewed on card modal open
     │   ├── add_to_collection.php
     │   ├── add_to_deck.php
     │   ├── add_to_wishlist.php
@@ -179,6 +205,7 @@ mtg-manager-repo/               ← GitHub repo root
     │   ├── login.php
     │   ├── register.php
     │   ├── logout.php
+    │   ├── delete_account.php  ← wipes all user data and destroys session
     │   ├── add_to_deck.php
     │   ├── clear_deck.php
     │   ├── create_deck.php
