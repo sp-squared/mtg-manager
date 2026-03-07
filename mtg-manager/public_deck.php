@@ -38,8 +38,6 @@ if (!$code) {
         $side_total = array_sum(array_column($side_cards, 'quantity'));
     }
 }
-
-$dbc->close();
 ?>
 
 <div class="container my-4" style="max-width:800px;">
@@ -53,7 +51,7 @@ $dbc->close();
     <?php else: ?>
 
     <!-- Header -->
-    <div class="card shadow-sm mb-4" style="border-top:4px solid #c9a227;">
+    <div class="card shadow-sm mb-4" style="border-top:4px solid #c9a227;background:#1e1e2e;">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
                 <div>
@@ -90,7 +88,7 @@ $dbc->close();
     <div class="row g-4">
         <!-- Main Deck -->
         <div class="col-md-<?= $side_total > 0 ? '8' : '12' ?>">
-            <div class="card shadow-sm">
+            <div class="card shadow-sm" style="background:#1e1e2e;">
                 <div class="card-header" style="background:rgba(201,162,39,0.08);border-bottom:1px solid rgba(201,162,39,0.2);">
                     <span style="color:#c9a227;font-weight:600;">
                         <i class="bi bi-stack me-2"></i>Main Deck
@@ -98,7 +96,7 @@ $dbc->close();
                     </span>
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-sm mb-0" style="font-size:0.85rem;">
+                    <table class="table table-sm mb-0" style="font-size:0.85rem;color:#e8e8e8;">
                         <tbody>
                         <?php foreach ($main_cards as $card): ?>
                             <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
@@ -118,7 +116,7 @@ $dbc->close();
         <?php if ($side_total > 0): ?>
         <!-- Sideboard -->
         <div class="col-md-4">
-            <div class="card shadow-sm">
+            <div class="card shadow-sm" style="background:#1e1e2e;">
                 <div class="card-header" style="background:rgba(136,153,170,0.08);border-bottom:1px solid rgba(136,153,170,0.2);">
                     <span style="color:#8899aa;font-weight:600;">
                         <i class="bi bi-collection me-2"></i>Sideboard
@@ -126,7 +124,7 @@ $dbc->close();
                     </span>
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-sm mb-0" style="font-size:0.85rem;">
+                    <table class="table table-sm mb-0" style="font-size:0.85rem;color:#e8e8e8;">
                         <tbody>
                         <?php foreach ($side_cards as $card): ?>
                             <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
@@ -151,4 +149,7 @@ $dbc->close();
     <?php endif; ?>
 </div>
 
-<?php include __DIR__ . '/includes/footer.php'; ?>
+<?php
+$dbc->close();
+include __DIR__ . '/includes/footer.php';
+?>

@@ -1,5 +1,9 @@
 <?php
-include __DIR__ . '/includes/header.php';
+// ── Bootstrap session + auth + DB before any output ──
+if (session_status() === PHP_SESSION_NONE) session_start();
+require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/includes/connect.php';
+
 if (!isLoggedIn()) {
     global $_session_kicked;
     $msg = $_session_kicked
@@ -8,7 +12,6 @@ if (!isLoggedIn()) {
     header("Location: index.php?error=" . $msg);
     exit();
 }
-include __DIR__ . '/includes/connect.php';
 $user_id = getUserId();
 
 // Auto-create table
@@ -23,6 +26,23 @@ $dbc->query("CREATE TABLE IF NOT EXISTS price_alerts (
     INDEX idx_user_active (user_id, is_active),
     UNIQUE KEY uq_user_card (user_id, card_id)
 )");
+
+// Handle edit
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_alert_id'], $_POST['new_target_price'])) {
+    requireCsrf();
+    $edit_id   = (int)$_POST['edit_alert_id'];
+    $new_price = round((float)$_POST['new_target_price'], 2);
+    if ($edit_id && $new_price > 0) {
+        $upd = $dbc->prepare(
+            "UPDATE price_alerts SET target_price = ?, is_active = 1, triggered_at = NULL WHERE id = ? AND user_id = ?"
+        );
+        $upd->bind_param("dii", $new_price, $edit_id, $user_id);
+        $upd->execute();
+        $upd->close();
+    }
+    header("Location: price_alerts.php?msg=updated");
+    exit();
+}
 
 // Handle delete
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_alert_id'])) {
@@ -80,7 +100,9 @@ $alerts_stmt->bind_param("i", $user_id);
 $alerts_stmt->execute();
 $alerts = $alerts_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $alerts_stmt->close();
-$dbc->close();
+
+// ── All PHP done, now safe to output HTML ──
+include __DIR__ . '/includes/header.php';
 ?>
 
 <div class="container my-4" style="max-width:860px;">
@@ -93,6 +115,11 @@ $dbc->close();
             Alert saved. You'll be notified on the dashboard when the price drops.
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
+    <?php elseif ($msg === 'updated'): ?>
+        <div class="alert alert-success alert-dismissible fade show">
+            Target price updated.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
     <?php elseif ($msg === 'deleted'): ?>
         <div class="alert alert-warning alert-dismissible fade show">
             Alert removed.
@@ -101,7 +128,7 @@ $dbc->close();
     <?php endif; ?>
 
     <!-- Add Alert -->
-    <div class="card shadow-sm mb-4">
+    <div class="card shadow-sm mb-4" style="background:#1e1e2e;">
         <div class="card-header" style="background:rgba(201,162,39,0.08);border-bottom:1px solid rgba(201,162,39,0.2);">
             <span style="color:#c9a227;font-weight:600;"><i class="bi bi-plus-circle me-2"></i>Add Price Alert</span>
         </div>
@@ -127,7 +154,7 @@ $dbc->close();
                 <div class="mb-3">
                     <label class="form-label" style="color:#e8e8e8;">Alert me when price drops to or below ($)</label>
                     <input type="number" name="target_price" class="form-control" step="0.01" min="0.01"
-                           placeholder="e.g. 5.00" style="max-width:200px;">
+                           placeholder="e.g. 5.00" style="max-width:200px;background:#1e1e2e;color:#e8e8e8;border-color:rgba(201,162,39,0.3);">
                 </div>
                 <button type="submit" class="btn btn-primary" id="alert-submit-btn" disabled>
                     <i class="bi bi-bell-fill me-1"></i>Set Alert
@@ -140,12 +167,12 @@ $dbc->close();
     <?php if (empty($alerts)): ?>
         <div class="alert alert-info mt-4">No price alerts yet. Add one above.</div>
     <?php else: ?>
-    <div class="card shadow-sm mt-4">
+    <div class="card shadow-sm mt-4" style="background:#1e1e2e;">
         <div class="card-header" style="background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.08);">
             <span style="color:#e8e8e8;font-weight:600;">Your Alerts</span>
         </div>
         <div class="table-responsive">
-        <table class="table table-sm mb-0" style="font-size:0.88rem;">
+        <table class="table table-sm mb-0" style="font-size:0.88rem;color:#e8e8e8;">
             <thead>
                 <tr style="color:#8899aa;border-bottom:1px solid rgba(255,255,255,0.1);">
                     <th>Card</th>
@@ -162,13 +189,28 @@ $dbc->close();
                 $hit     = ($current !== null && $current <= $target);
                 $active  = (bool)$alert['is_active'];
             ?>
-            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);<?= !$active ? 'opacity:0.5;' : '' ?>">
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);<?= !$active ? 'opacity:0.5;' : '' ?>"
+                data-id="<?= $alert['id'] ?>" data-target="<?= $target ?>">
                 <td>
-                    <span style="color:#e8e8e8;"><?= htmlspecialchars($alert['name']) ?></span><br>
-                    <span class="small" style="color:#8899aa;"><?= htmlspecialchars($alert['type_line']) ?></span>
+                    <span style="color:#000000;font-weight:500;"><?= htmlspecialchars($alert['name']) ?></span><br>
+                    <span class="small" style="color:#000000;"><?= htmlspecialchars($alert['type_line']) ?></span>
                 </td>
-                <td class="text-end fw-bold" style="color:#c9a227;">$<?= number_format($target, 2) ?></td>
-                <td class="text-end" style="color:<?= $current === null ? '#8899aa' : ($hit ? '#4ade80' : '#e8e8e8') ?>;">
+                <td class="text-end fw-bold" style="color:#c9a227;">
+                    <span class="target-display">$<?= number_format($target, 2) ?></span>
+                    <form class="target-edit-form d-none" method="post" style="display:inline;">
+                        <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                        <input type="hidden" name="edit_alert_id" value="<?= $alert['id'] ?>">
+                        <div class="d-flex align-items-center gap-1 justify-content-end">
+                            <input type="number" name="new_target_price" step="0.01" min="0.01"
+                                   class="form-control form-control-sm target-input"
+                                   value="<?= $target ?>"
+                                   style="width:80px;background:#ffffff;color:#333333;border-color:rgba(201,162,39,0.6);">
+                            <button type="submit" class="btn btn-sm btn-outline-success" title="Save"><i class="bi bi-check2"></i></button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary cancel-edit" title="Cancel"><i class="bi bi-x"></i></button>
+                        </div>
+                    </form>
+                </td>
+                <td class="text-end" style="color:<?= $current === null ? '#000000' : ($hit ? '#4ade80' : '#000000') ?>;font-weight:500;">
                     <?= $current !== null ? '$' . number_format($current, 2) : '—' ?>
                 </td>
                 <td class="text-center">
@@ -185,14 +227,19 @@ $dbc->close();
                     <?php endif; ?>
                 </td>
                 <td class="text-end">
-                    <form method="post" class="d-inline">
-                        <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
-                        <input type="hidden" name="delete_alert_id" value="<?= $alert['id'] ?>">
-                        <button class="btn btn-sm btn-outline-danger" type="submit"
-                                onclick="return confirm('Remove this price alert?')" title="Remove">
-                            <i class="bi bi-trash3"></i>
+                    <div class="d-flex gap-1 justify-content-end">
+                        <button class="btn btn-sm btn-outline-warning edit-alert-btn" type="button" title="Edit target">
+                            <i class="bi bi-pencil"></i>
                         </button>
-                    </form>
+                        <form method="post" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                            <input type="hidden" name="delete_alert_id" value="<?= $alert['id'] ?>">
+                            <button class="btn btn-sm btn-outline-danger" type="submit"
+                                    onclick="return confirm('Remove this price alert?')" title="Remove">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        </form>
+                    </div>
                 </td>
             </tr>
             <?php endforeach; ?>
@@ -257,6 +304,27 @@ document.addEventListener('click', e => {
 document.getElementById('alert-form').addEventListener('submit', function(e) {
     if (!formCardId.value) { e.preventDefault(); alert('Please select a card first.'); }
 });
+
+// Inline edit target price
+document.querySelectorAll('.edit-alert-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const row = this.closest('tr');
+        row.querySelector('.target-display').classList.add('d-none');
+        row.querySelector('.target-edit-form').classList.remove('d-none');
+        row.querySelector('.target-input').focus();
+    });
+});
+
+document.querySelectorAll('.cancel-edit').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const row = this.closest('tr');
+        row.querySelector('.target-display').classList.remove('d-none');
+        row.querySelector('.target-edit-form').classList.add('d-none');
+    });
+});
 </script>
 
-<?php include __DIR__ . '/includes/footer.php'; ?>
+<?php
+$dbc->close();
+include __DIR__ . '/includes/footer.php';
+?>
