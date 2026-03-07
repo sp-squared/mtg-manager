@@ -113,8 +113,11 @@ $dbc->close();
             <div class="mb-3">
                 <label class="form-label" style="color:#e8e8e8;">Card Name</label>
                 <input type="text" id="alert-card-search" class="form-control"
-                       placeholder="Start typing a card name…" autocomplete="off">
-                <div id="alert-search-results" class="list-group mt-1" style="display:none;position:absolute;z-index:999;max-width:460px;max-height:240px;overflow-y:auto;"></div>
+                       placeholder="Start typing a card name…" autocomplete="off"
+                       style="background:#1e1e2e;color:#e8e8e8;border-color:rgba(201,162,39,0.3);">
+                <div id="alert-search-results" class="list-group mt-1"
+                     style="display:none;position:absolute;z-index:999;max-width:460px;max-height:240px;overflow-y:auto;
+                            background:#1e1e2e;border:1px solid rgba(201,162,39,0.3);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,0.6);"></div>
                 <input type="hidden" id="alert-card-id">
                 <div id="alert-selected-card" class="mt-2 small" style="color:#4ade80;display:none;"></div>
             </div>
@@ -135,9 +138,9 @@ $dbc->close();
 
     <!-- Alerts List -->
     <?php if (empty($alerts)): ?>
-        <div class="alert alert-info">No price alerts yet. Add one above.</div>
+        <div class="alert alert-info mt-4">No price alerts yet. Add one above.</div>
     <?php else: ?>
-    <div class="card shadow-sm">
+    <div class="card shadow-sm mt-4">
         <div class="card-header" style="background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.08);">
             <span style="color:#e8e8e8;font-weight:600;">Your Alerts</span>
         </div>
@@ -224,7 +227,9 @@ searchInput.addEventListener('input', function () {
                 const a = document.createElement('a');
                 a.href = '#';
                 a.className = 'list-group-item list-group-item-action';
-                a.style.cssText = 'background:#1a1a2e;color:#e8e8e8;border-color:rgba(255,255,255,0.1);';
+                a.style.cssText = 'background:#1e1e2e;color:#e8e8e8;border-color:rgba(255,255,255,0.08);';
+                a.addEventListener('mouseover', () => a.style.background = '#2a2a3e');
+                a.addEventListener('mouseout',  () => a.style.background = '#1e1e2e');
                 a.textContent = card.name + (card.type_line ? ' — ' + card.type_line : '');
                 a.addEventListener('click', function(e) {
                     e.preventDefault();
