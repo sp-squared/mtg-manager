@@ -274,10 +274,17 @@ searchInput.addEventListener('input', function () {
                 const a = document.createElement('a');
                 a.href = '#';
                 a.className = 'list-group-item list-group-item-action';
-                a.style.cssText = 'background:#1e1e2e;color:#e8e8e8;border-color:rgba(255,255,255,0.08);';
+                a.style.cssText = 'background:#1e1e2e;color:#e8e8e8;border-color:rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;gap:8px;';
                 a.addEventListener('mouseover', () => a.style.background = '#2a2a3e');
                 a.addEventListener('mouseout',  () => a.style.background = '#1e1e2e');
-                a.textContent = card.name + (card.type_line ? ' — ' + card.type_line : '');
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = card.name + (card.type_line ? ' — ' + card.type_line : '');
+                nameSpan.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+                const priceSpan = document.createElement('span');
+                priceSpan.textContent = card.price_usd ? '$' + parseFloat(card.price_usd).toFixed(2) : '—';
+                priceSpan.style.cssText = 'color:#c9a227;font-weight:600;white-space:nowrap;flex-shrink:0;font-size:0.85em;';
+                a.appendChild(nameSpan);
+                a.appendChild(priceSpan);
                 a.addEventListener('click', function(e) {
                     e.preventDefault();
                     cardIdField.value = card.id;
