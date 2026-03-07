@@ -116,8 +116,8 @@ $dbc->close();
                        placeholder="Start typing a card name…" autocomplete="off"
                        style="background:#1e1e2e;color:#e8e8e8;border-color:rgba(201,162,39,0.3);">
                 <div id="alert-search-results" class="list-group mt-1"
-                     style="display:none;position:absolute;z-index:999;max-width:460px;max-height:240px;overflow-y:auto;
-                            background:#1e1e2e;border:1px solid rgba(201,162,39,0.3);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,0.6);"></div>
+                     style="display:none;max-height:240px;overflow-y:auto;
+                            background:#1e1e2e;border:1px solid rgba(201,162,39,0.3);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.5);"></div>
                 <input type="hidden" id="alert-card-id">
                 <div id="alert-selected-card" class="mt-2 small" style="color:#4ade80;display:none;"></div>
             </div>
