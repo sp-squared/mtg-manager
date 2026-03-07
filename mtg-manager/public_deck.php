@@ -7,9 +7,7 @@ $export = null;
 $cards  = [];
 $error  = '';
 
-if (!$code) {
-    $error = 'No deck code provided. Add <code>?code=MTG-XXXXXXXX</code> to the URL.';
-} else {
+if ($code) {
     $s = $dbc->prepare(
         "SELECT e.export_code, e.deck_name, e.description, e.card_data,
                 e.created_at, e.expires_at, e.import_count, p.username as owner
@@ -23,7 +21,7 @@ if (!$code) {
     $s->close();
 
     if (!$export) {
-        $error = 'No deck found with that code.';
+        $error = 'No deck found with that code. Check the code and try again.';
     } elseif ($export['expires_at'] && strtotime($export['expires_at']) < time()) {
         $error = 'This share code has expired.';
         $export = null;
@@ -42,13 +40,38 @@ if (!$code) {
 
 <div class="container my-4" style="max-width:800px;">
 
-    <?php if ($error): ?>
-        <div class="alert alert-danger"><?= $error ?></div>
-        <a href="import_deck.php" class="btn btn-outline-secondary">
-            <i class="bi bi-box-arrow-in-down me-1"></i>Import a Deck Instead
-        </a>
+    <div class="d-flex align-items-center gap-3 mb-4">
+        <h1 class="mb-0" style="color:#c9a227;"><i class="bi bi-eye me-2"></i>Preview Deck</h1>
+    </div>
 
-    <?php else: ?>
+    <!-- Code entry -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <label class="form-label" style="color:#e8e8e8;">Enter Export Code</label>
+            <small class="d-block mb-2" style="color:#8899aa;">
+                Codes look like <code style="color:#c9a227;">MTG-ABCD1234</code> — ask the deck owner to share theirs.
+            </small>
+            <form method="get" action="public_deck.php" class="d-flex gap-2">
+                <input type="text" name="code" class="form-control"
+                       placeholder="MTG-XXXXXXXX"
+                       value="<?= htmlspecialchars($code) ?>"
+                       maxlength="12"
+                       id="code-input"
+                       style="text-transform:uppercase;letter-spacing:0.08em;font-family:monospace;max-width:220px;"
+                       autocomplete="off"
+                       required>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search me-1"></i>Preview
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <?php if ($error): ?>
+        <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
+    <?php endif; ?>
+
+    <?php if ($export && $cards): ?>
 
     <!-- Header -->
     <div class="card shadow-sm mb-4" style="border-top:4px solid #c9a227;background:#1e1e2e;">
@@ -146,8 +169,35 @@ if (!$code) {
         Imported <?= (int)$export['import_count'] ?> time<?= $export['import_count'] !== 1 ? 's' : '' ?>
     </p>
 
-    <?php endif; ?>
+    <?php endif; // export && cards ?>
 </div>
+
+<script>
+// Auto-uppercase and insert hyphen after MTG prefix
+(function () {
+    const input = document.getElementById('code-input');
+    if (!input) return;
+
+    input.addEventListener('input', function () {
+        let raw = this.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        if (raw.length >= 3 && raw.substring(0, 3) !== 'MTG') {
+            raw = 'MTG' + raw.replace(/^MTG/i, '');
+        }
+        this.value = raw.length > 3
+            ? raw.substring(0, 3) + '-' + raw.substring(3, 11)
+            : raw;
+    });
+
+    input.addEventListener('paste', function () {
+        setTimeout(() => {
+            let raw = this.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+            this.value = raw.length > 3
+                ? raw.substring(0, 3) + '-' + raw.substring(3, 11)
+                : raw;
+        }, 0);
+    });
+})();
+</script>
 
 <?php
 $dbc->close();
