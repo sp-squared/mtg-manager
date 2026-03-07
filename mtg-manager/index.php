@@ -1,4 +1,5 @@
 <?php
+ob_start();
 include __DIR__ . '/includes/header.php';
 if (isLoggedIn()) {
     header("Location: dashboard.php");
