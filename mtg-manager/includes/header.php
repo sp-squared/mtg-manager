@@ -40,6 +40,11 @@ require_once __DIR__ . '/connect.php';   // ensures $dbc is always available bef
                 <li class="nav-item">
                     <a class="nav-link <?= $current_page === 'search.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/search.php">Search</a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link <?= $current_page === 'life_counter.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/life_counter.php">
+                        <i class="bi bi-heart-half me-1"></i>Life Counter <span style="font-size:0.75em;opacity:0.7;">(Mobile)</span>
+                    </a>
+                </li>
                 <?php if (isLoggedIn()): ?>
                     <li class="nav-item">
                         <a class="nav-link <?= $current_page === 'collection.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/collection.php">Collection</a>
@@ -65,6 +70,11 @@ require_once __DIR__ . '/connect.php';   // ensures $dbc is always available bef
                         <a class="nav-link <?= $current_page === 'profile.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/profile.php">Profile</a>
                     </li>
                 <?php else: ?>
+                    <li class="nav-item">
+                        <a class="nav-link <?= $current_page === 'public_deck.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/public_deck.php">
+                            <i class="bi bi-eye me-1"></i>Preview Deck
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link <?= $current_page === 'portal.php' ? 'active' : '' ?>" href="<?= defined('APP_BASE') ? APP_BASE : '' ?>/portal.php">Register</a>
                     </li>

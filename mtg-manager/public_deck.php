@@ -95,15 +95,15 @@ if (!$code) {
                         <span class="badge ms-2 bg-secondary"><?= $main_total ?></span>
                     </span>
                 </div>
-                <div class="card-body p-0">
-                    <table class="table table-sm mb-0" style="font-size:0.85rem;color:#e8e8e8;">
+                <div class="card-body p-0" style="background:#ffffff;">
+                    <table class="table table-sm mb-0" style="font-size:0.85rem;color:#111111;background:#ffffff;">
                         <tbody>
                         <?php foreach ($main_cards as $card): ?>
-                            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                                <td style="width:36px;color:#8899aa;text-align:right;padding-right:8px;"><?= (int)$card['quantity'] ?></td>
-                                <td style="color:#e8e8e8;"><?= htmlspecialchars($card['name']) ?></td>
+                            <tr style="border-bottom:1px solid #e5e7eb;">
+                                <td style="width:36px;color:#6b7280;text-align:right;padding-right:8px;"><?= (int)$card['quantity'] ?></td>
+                                <td style="color:#111111;"><?= htmlspecialchars($card['name']) ?></td>
                                 <?php if (!empty($card['mana_cost'])): ?>
-                                <td class="text-end" style="color:#8899aa;font-size:0.78rem;"><?= htmlspecialchars($card['mana_cost']) ?></td>
+                                <td class="text-end" style="color:#6b7280;font-size:0.78rem;"><?= htmlspecialchars($card['mana_cost']) ?></td>
                                 <?php endif; ?>
                             </tr>
                         <?php endforeach; ?>
@@ -123,13 +123,13 @@ if (!$code) {
                         <span class="badge ms-2 bg-secondary"><?= $side_total ?></span>
                     </span>
                 </div>
-                <div class="card-body p-0">
-                    <table class="table table-sm mb-0" style="font-size:0.85rem;color:#e8e8e8;">
+                <div class="card-body p-0" style="background:#ffffff;">
+                    <table class="table table-sm mb-0" style="font-size:0.85rem;color:#111111;background:#ffffff;">
                         <tbody>
                         <?php foreach ($side_cards as $card): ?>
-                            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                                <td style="width:36px;color:#8899aa;text-align:right;padding-right:8px;"><?= (int)$card['quantity'] ?></td>
-                                <td style="color:#e8e8e8;"><?= htmlspecialchars($card['name']) ?></td>
+                            <tr style="border-bottom:1px solid #e5e7eb;">
+                                <td style="width:36px;color:#6b7280;text-align:right;padding-right:8px;"><?= (int)$card['quantity'] ?></td>
+                                <td style="color:#111111;"><?= htmlspecialchars($card['name']) ?></td>
                             </tr>
                         <?php endforeach; ?>
                         </tbody>
