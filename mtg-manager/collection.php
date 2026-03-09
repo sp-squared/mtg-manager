@@ -125,6 +125,14 @@ if ($colorless_req) {
 
 $where = "WHERE " . implode(' AND ', $conditions);
 
+// Fetch user's decks for the "Add to Deck" dropdown
+$user_decks = [];
+$deck_stmt = $dbc->prepare("SELECT id, name FROM decks WHERE user_id = ? ORDER BY name ASC");
+$deck_stmt->bind_param("i", $user_id);
+$deck_stmt->execute();
+$user_decks = $deck_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$deck_stmt->close();
+
 // Sort
 $sort_options = [
     'added'       => 'uc.added_at DESC, c.name ASC',
@@ -420,6 +428,36 @@ $result = $stmt->get_result();
                                     <button class="btn btn-success" type="submit">Update</button>
                                 </div>
                             </form>
+                            <!-- Add to Deck -->
+                            <?php if (!empty($user_decks)): ?>
+                            <form class="add-deck-form mb-2"
+                                  data-card-id="<?= htmlspecialchars($row['id']) ?>"
+                                  data-card-name="<?= htmlspecialchars($row['name'], ENT_QUOTES) ?>">
+                                <div class="input-group input-group-sm">
+                                    <select class="form-select deck-select" name="deck_id">
+                                        <option value="">— Pick deck —</option>
+                                        <?php foreach ($user_decks as $ud): ?>
+                                        <option value="<?= $ud['id'] ?>"><?= htmlspecialchars($ud['name']) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <button class="btn btn-primary" type="submit">+ Deck</button>
+                                </div>
+                            </form>
+                            <?php else: ?>
+                            <a href="decks.php" class="btn btn-sm btn-outline-primary w-100 mb-2">Create a deck first</a>
+                            <?php endif; ?>
+                            <!-- Add to Wishlist -->
+                            <form class="add-wishlist-form mb-2">
+                                <input type="hidden" name="card_id" value="<?= $row['id'] ?>">
+                                <div class="input-group input-group-sm">
+                                    <select class="form-select" name="priority">
+                                        <option value="1">Low</option>
+                                        <option value="2">Medium</option>
+                                        <option value="3" selected>High</option>
+                                    </select>
+                                    <button class="btn btn-warning" type="submit">Wishlist</button>
+                                </div>
+                            </form>
                             <!-- Remove button -->
                             <form action="actions/remove_from_collection.php" method="post" onsubmit="return confirm('Remove this card from your collection?');">
                                 <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
@@ -710,6 +748,94 @@ function renderColRulings(rulings) {
         </div>
     `).join('');
 }
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toastEl = document.createElement('div');
+        toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
+        toastEl.setAttribute('role', 'alert');
+        toastEl.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        container.appendChild(toastEl);
+        const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+        toast.show();
+        toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+    }
+
+    // Add to Wishlist AJAX
+    document.querySelectorAll('.add-wishlist-form').forEach(form => {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+            try {
+                const response = await fetch('ajax/add_to_wishlist.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showToast(result.message, 'success');
+                } else {
+                    showToast(result.error || 'Error', 'danger');
+                }
+            } catch (err) {
+                showToast('Network error', 'danger');
+            }
+        });
+    });
+
+    // Add to Deck AJAX
+    document.querySelectorAll('.add-deck-form').forEach(form => {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const select   = form.querySelector('.deck-select');
+            const deckId   = select.value;
+            const cardId   = form.dataset.cardId;
+            const cardName = form.dataset.cardName;
+
+            if (!deckId) {
+                showToast('Please select a deck first.', 'warning');
+                return;
+            }
+
+            const btn = form.querySelector('button[type="submit"]');
+            const orig = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '…';
+
+            const fd = new FormData();
+            fd.append('card_id', cardId);
+            fd.append('deck_id', deckId);
+            fd.append('quantity', 1);
+
+            try {
+                const res  = await fetch('ajax/add_to_deck.php', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(
+                        `<strong>${data.card_name}</strong> added to <strong>${data.deck_name}</strong>.`,
+                        'success'
+                    );
+                    select.value = '';
+                } else {
+                    showToast(data.error || 'Could not add to deck.', 'danger');
+                }
+            } catch {
+                showToast('Network error.', 'danger');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = orig;
+            }
+        });
+    });
+});
 </script>
 
 <?php
