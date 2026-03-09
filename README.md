@@ -45,9 +45,9 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 
 ![screenshot](/mtg-manager/img/dev007.png)
 
-### My Decks Page
+### My Wishlist Page
 
-![screenshot](/mtg-manager/img/dev013.png)
+![screenshot](/mtg-manager/img/dev014.png)
 
 ### Import Deck Page
 
