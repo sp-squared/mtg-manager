@@ -180,6 +180,43 @@ $hist_stmt->execute();
 $hist_rows = $hist_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $hist_stmt->close();
 
+// ── Collection Update Alerts ───────────────────────────────────────────────
+$collection_update_alerts_table_stmt = $dbc->prepare("CREATE TABLE IF NOT EXISTS collection_value_update_alerts (
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id        INT NOT NULL,
+    source         VARCHAR(40) NOT NULL,
+    previous_value DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    current_value  DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    trend          ENUM('up','down','unchanged') NOT NULL,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_read        TINYINT(1) NOT NULL DEFAULT 0,
+    INDEX idx_user_unread (user_id, is_read, created_at),
+    INDEX idx_user_latest (user_id, id)
+)");
+$collection_update_alerts_table_stmt->execute();
+$collection_update_alerts_table_stmt->close();
+
+$collection_update_alert = null;
+$collection_update_alert_stmt = $dbc->prepare(
+    "SELECT id, source, previous_value, current_value, trend, created_at
+     FROM collection_value_update_alerts
+     WHERE user_id = ? AND is_read = 0
+     ORDER BY created_at DESC, id DESC
+     LIMIT 1"
+);
+$collection_update_alert_stmt->bind_param("i", $user_id);
+$collection_update_alert_stmt->execute();
+$collection_update_alert = $collection_update_alert_stmt->get_result()->fetch_assoc() ?: null;
+$collection_update_alert_stmt->close();
+
+if ($collection_update_alert !== null) {
+    $alert_id = (int)$collection_update_alert['id'];
+    $mark_read_stmt = $dbc->prepare("UPDATE collection_value_update_alerts SET is_read = 1 WHERE id = ?");
+    $mark_read_stmt->bind_param("i", $alert_id);
+    $mark_read_stmt->execute();
+    $mark_read_stmt->close();
+}
+
 // ── Daily Cards pile ──────────────────────────────────────────────────────────
 // Auto-create table if it doesn't exist
 $daily_cards_table_stmt = $dbc->prepare("CREATE TABLE IF NOT EXISTS daily_cards (
@@ -295,6 +332,26 @@ mysqli_close($dbc);
 ?>
 
 <div class="container my-4">
+
+    <?php if ($collection_update_alert !== null): ?>
+    <div class="alert alert-info alert-dismissible fade show mb-4" style="border-color:rgba(147,197,253,0.4);background:rgba(147,197,253,0.08);">
+        <strong style="color:#93c5fd;"><i class="bi bi-graph-up-arrow me-2"></i>Collection Value Update</strong>
+        <?php
+            $trend = $collection_update_alert['trend'];
+            $isUp = $trend === 'up';
+            $isDown = $trend === 'down';
+            $trendLabel = $isUp ? 'Trending up' : ($isDown ? 'Trending down' : 'Unchanged');
+            $trendColor = $isUp ? '#4ade80' : ($isDown ? '#f87171' : '#e8e8e8');
+            $sourceLabel = $collection_update_alert['source'] === 'scryfall_import' ? 'Scryfall import' : 'price update';
+        ?>
+        <p class="mb-1 mt-2" style="color:#e8e8e8;">
+            After <strong><?= htmlspecialchars($sourceLabel) ?></strong>, your collection is
+            <strong style="color:<?= $trendColor ?>;"><?= $trendLabel ?></strong>
+            (was <strong>$<?= number_format((float)$collection_update_alert['previous_value'], 2) ?></strong>, now <strong>$<?= number_format((float)$collection_update_alert['current_value'], 2) ?></strong>).
+        </p>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <?php endif; ?>
 
     <?php if (!empty($triggered_alerts)): ?>
     <div class="alert alert-warning alert-dismissible fade show mb-4" style="border-color:rgba(201,162,39,0.4);background:rgba(201,162,39,0.08);">
