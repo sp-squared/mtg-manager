@@ -79,6 +79,55 @@ function prog(string $msg, string $color = '#e8e8e8'): void {
     flush_prices("<div style='color:{$color};font-family:monospace;font-size:0.85rem;margin:1px 0;'>{$msg}</div>\n");
 }
 
+function recordCollectionUpdateAlerts(mysqli $dbc, string $source): void {
+    $dbc->query("CREATE TABLE IF NOT EXISTS collection_value_update_alerts (
+        id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id        INT NOT NULL,
+        source         VARCHAR(40) NOT NULL,
+        previous_value DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        current_value  DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        trend          ENUM('up','down','unchanged') NOT NULL,
+        created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        is_read        TINYINT(1) NOT NULL DEFAULT 0,
+        INDEX idx_user_unread (user_id, is_read, created_at),
+        INDEX idx_user_latest (user_id, id)
+    )");
+
+    $sql = "INSERT INTO collection_value_update_alerts (user_id, source, previous_value, current_value, trend)
+            SELECT p.id,
+                   ?,
+                   IFNULL(prev.current_value, 0.00) AS previous_value,
+                   IFNULL(cv.total_value, 0.00) AS current_value,
+                   CASE
+                       WHEN IFNULL(cv.total_value, 0.00) > IFNULL(prev.current_value, 0.00) THEN 'up'
+                       WHEN IFNULL(cv.total_value, 0.00) < IFNULL(prev.current_value, 0.00) THEN 'down'
+                       ELSE 'unchanged'
+                   END AS trend
+            FROM player p
+            LEFT JOIN (
+                SELECT uc.user_id, ROUND(SUM(cp.price_usd * uc.quantity), 2) AS total_value
+                FROM user_collection uc
+                JOIN card_prices cp ON cp.card_id = uc.card_id
+                GROUP BY uc.user_id
+            ) cv ON cv.user_id = p.id
+            LEFT JOIN (
+                SELECT a.user_id, a.current_value
+                FROM collection_value_update_alerts a
+                JOIN (
+                    SELECT user_id, MAX(id) AS latest_id
+                    FROM collection_value_update_alerts
+                    GROUP BY user_id
+                ) last_alert ON last_alert.latest_id = a.id
+            ) prev ON prev.user_id = p.id";
+
+    $stmt = $dbc->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param('s', $source);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
+
 /**
  * Minimal streaming JSON parser — same approach as import_scryfall.
  * Yields one top-level object at a time from a JSON array stream.
@@ -359,6 +408,11 @@ prog("   Cards updated   : " . number_format($updated),   '#75b798');
 prog("   No price data   : " . number_format($no_price),  '#8899aa');
 prog("   Skipped (tokens): " . number_format($skipped),   '#8899aa');
 prog("   Errors          : " . number_format($errors),    $errors ? '#f87171' : '#8899aa');
+
+if ($errors === 0) {
+    recordCollectionUpdateAlerts($dbc, 'price_update');
+    prog('📣 Collection value alerts generated for all users.', '#75b798');
+}
 
 done_prices:
 $dbc->close();
