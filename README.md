@@ -30,6 +30,7 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 ### Dashboard
 
 ![screenshot](/mtg-manager/img/dev003.png)
+![screenshot](/mtg-manager/img/dev013.png)
 ![screenshot](/mtg-manager/img/dev004.png)
 
 ### Card Search
