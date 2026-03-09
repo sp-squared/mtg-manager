@@ -33,7 +33,10 @@ $wish_count = mysqli_fetch_assoc(mysqli_stmt_get_result($wish_stmt))['total'] ??
 
 // Collection value (requires card_prices table — skip gracefully if missing)
 $collection_value = null;
-$table_exists = $dbc->query("SHOW TABLES LIKE 'card_prices'")->num_rows > 0;
+$table_exists_stmt = $dbc->prepare("SHOW TABLES LIKE 'card_prices'");
+$table_exists_stmt->execute();
+$table_exists = $table_exists_stmt->get_result()->num_rows > 0;
+$table_exists_stmt->close();
 if ($table_exists) {
     $val_stmt = mysqli_prepare($dbc,
         "SELECT SUM(cp.price_usd * uc.quantity) as total_value
@@ -59,7 +62,7 @@ while ($r = mysqli_fetch_assoc($fav_result)) $fav_rows[] = $r;
 $fav_count = count($fav_rows);
 
 // Recently viewed (last 8 by viewed_at, cross-page tracking)
-$dbc->query("CREATE TABLE IF NOT EXISTS recently_viewed (
+$recently_viewed_table_stmt = $dbc->prepare("CREATE TABLE IF NOT EXISTS recently_viewed (
     id        INT AUTO_INCREMENT PRIMARY KEY,
     user_id   INT NOT NULL,
     card_id   VARCHAR(36) NOT NULL,
@@ -67,6 +70,8 @@ $dbc->query("CREATE TABLE IF NOT EXISTS recently_viewed (
     UNIQUE KEY uq_user_card (user_id, card_id),
     INDEX idx_user_viewed (user_id, viewed_at)
 )");
+$recently_viewed_table_stmt->execute();
+$recently_viewed_table_stmt->close();
 $recent_stmt = $dbc->prepare(
     "SELECT c.id, c.name, c.image_uri, c.rarity, c.mana_cost, s.name as set_name,
             rv.viewed_at
@@ -82,7 +87,7 @@ $recent_stmt->execute();
 $recent_result = $recent_stmt->get_result();
 
 // ── Price Alerts check ────────────────────────────────────────────────────────
-$dbc->query("CREATE TABLE IF NOT EXISTS price_alerts (
+$price_alerts_table_stmt = $dbc->prepare("CREATE TABLE IF NOT EXISTS price_alerts (
     id            INT AUTO_INCREMENT PRIMARY KEY,
     user_id       INT NOT NULL,
     card_id       VARCHAR(36) NOT NULL,
@@ -93,6 +98,8 @@ $dbc->query("CREATE TABLE IF NOT EXISTS price_alerts (
     INDEX idx_user_active (user_id, is_active),
     UNIQUE KEY uq_user_card (user_id, card_id)
 )");
+$price_alerts_table_stmt->execute();
+$price_alerts_table_stmt->close();
 $triggered_alerts = [];
 $pa_stmt = $dbc->prepare(
     "SELECT pa.id, pa.target_price, c.name, cp.price_usd
@@ -110,12 +117,18 @@ $pa_stmt->close();
 
 // Mark triggered alerts as inactive
 if (!empty($triggered_alerts)) {
-    $ids = implode(',', array_map('intval', array_column($triggered_alerts, 'id')));
-    $dbc->query("UPDATE price_alerts SET is_active=0, triggered_at=NOW() WHERE id IN ($ids)");
+    $ids = array_map('intval', array_column($triggered_alerts, 'id'));
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $types = str_repeat('i', count($ids));
+    $update_sql = "UPDATE price_alerts SET is_active=0, triggered_at=NOW() WHERE id IN ($placeholders)";
+    $update_stmt = $dbc->prepare($update_sql);
+    $update_stmt->bind_param($types, ...$ids);
+    $update_stmt->execute();
+    $update_stmt->close();
 }
 
 // ── Collection Value History ──────────────────────────────────────────────────
-$dbc->query("CREATE TABLE IF NOT EXISTS collection_value_history (
+$value_history_table_stmt = $dbc->prepare("CREATE TABLE IF NOT EXISTS collection_value_history (
     id           INT AUTO_INCREMENT PRIMARY KEY,
     user_id      INT NOT NULL,
     recorded_date DATE NOT NULL,
@@ -125,6 +138,8 @@ $dbc->query("CREATE TABLE IF NOT EXISTS collection_value_history (
     UNIQUE KEY uq_user_date (user_id, recorded_date),
     INDEX idx_user_history (user_id, recorded_date)
 )");
+$value_history_table_stmt->execute();
+$value_history_table_stmt->close();
 
 // Record today's snapshot (once per day — ON DUPLICATE KEY ignores repeats)
 if ($collection_value !== null) {
@@ -167,15 +182,20 @@ $hist_stmt->close();
 
 // ── Daily Cards pile ──────────────────────────────────────────────────────────
 // Auto-create table if it doesn't exist
-$dbc->query("CREATE TABLE IF NOT EXISTS daily_cards (
+$daily_cards_table_stmt = $dbc->prepare("CREATE TABLE IF NOT EXISTS daily_cards (
     id           INT AUTO_INCREMENT PRIMARY KEY,
     card_id      VARCHAR(36) NOT NULL,
     display_date DATE NOT NULL UNIQUE,
     INDEX idx_date (display_date)
 )");
+$daily_cards_table_stmt->execute();
+$daily_cards_table_stmt->close();
 
 // Use MySQL CURDATE() as single source of truth for today's date.
-$today = $dbc->query("SELECT CURDATE() AS today")->fetch_assoc()['today'];
+$today_stmt = $dbc->prepare("SELECT CURDATE() AS today");
+$today_stmt->execute();
+$today = $today_stmt->get_result()->fetch_assoc()['today'];
+$today_stmt->close();
 
 // ── Gap detection and fill ────────────────────────────────────────────────────
 // Generate every date from the earliest daily_cards record to today using a
@@ -183,27 +203,33 @@ $today = $dbc->query("SELECT CURDATE() AS today")->fetch_assoc()['today'];
 // This is entirely MySQL-driven — no PHP date arithmetic involved.
 //
 // If the table is empty, seed just today and let future visits fill forward.
-$has_any = (int)$dbc->query("SELECT COUNT(*) AS n FROM daily_cards")->fetch_assoc()['n'];
+$has_any_stmt = $dbc->prepare("SELECT COUNT(*) AS n FROM daily_cards");
+$has_any_stmt->execute();
+$has_any = (int)$has_any_stmt->get_result()->fetch_assoc()['n'];
+$has_any_stmt->close();
 
 if ($has_any === 0) {
     // First ever visit — seed today
-    $rand = $dbc->query(
+    $rand_stmt = $dbc->prepare(
         "SELECT c.id FROM cards c
          WHERE c.type_line NOT LIKE '%Token%'
            AND c.type_line NOT LIKE '%Basic Land%'
            AND c.image_uri IS NOT NULL
          ORDER BY RAND() LIMIT 1"
     );
+    $rand_stmt->execute();
+    $rand = $rand_stmt->get_result();
     if ($rand_row = $rand->fetch_assoc()) {
         $ins = $dbc->prepare("INSERT IGNORE INTO daily_cards (card_id, display_date) VALUES (?, CURDATE())");
         $ins->bind_param("s", $rand_row['id']);
         $ins->execute();
         $ins->close();
     }
+    $rand_stmt->close();
 } else {
     // Find every missing date between earliest record and today using a
     // recursive CTE date series joined against existing records.
-    $gaps = $dbc->query(
+    $gaps_stmt = $dbc->prepare(
         "WITH RECURSIVE date_series AS (
              SELECT MIN(display_date) AS d FROM daily_cards
              UNION ALL
@@ -217,6 +243,8 @@ if ($has_any === 0) {
          WHERE daily_cards.display_date IS NULL
          ORDER BY d ASC"
     );
+    $gaps_stmt->execute();
+    $gaps = $gaps_stmt->get_result();
 
     if ($gaps && $gaps->num_rows > 0) {
         // Prepare a single insert statement and fill each gap with a unique card
@@ -237,6 +265,7 @@ if ($has_any === 0) {
         }
         $ins->close();
     }
+    $gaps_stmt->close();
 }
 
 // How many COTD slots we need:
