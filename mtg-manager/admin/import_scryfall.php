@@ -124,6 +124,9 @@ function recordCollectionUpdateAlerts(mysqli $dbc, string $source): void {
                 ) last_alert ON last_alert.latest_id = a.id
             ) prev ON prev.user_id = p.id";
 
+    // Keep only the most recent alert per user.
+    $dbc->query("DELETE FROM collection_value_update_alerts");
+
     $stmt = $dbc->prepare($sql);
     if ($stmt) {
         $stmt->bind_param('s', $source);
