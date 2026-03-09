@@ -19,6 +19,12 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 
 *Application screenshots will be added during development*
 
+### MySQL Workbench Database
+
+![screenshot](/mtg-manager/img/dev017.png)
+![screenshot](/mtg-manager/img/dev015.png)
+![screenshot](/mtg-manager/img/dev016.png)
+
 ### Create Account Page
 
 ![screenshot](/mtg-manager/img/dev001.png)
