@@ -196,25 +196,12 @@ $collection_update_alerts_table_stmt = $dbc->prepare("CREATE TABLE IF NOT EXISTS
 $collection_update_alerts_table_stmt->execute();
 $collection_update_alerts_table_stmt->close();
 
-$collection_update_alert = null;
-$collection_update_alert_stmt = $dbc->prepare(
 $collection_update_alerts = [];
 $collection_update_alerts_stmt = $dbc->prepare(
     "SELECT id, source, previous_value, current_value, trend, created_at
      FROM collection_value_update_alerts
      WHERE user_id = ? AND is_read = 0
      ORDER BY created_at DESC, id DESC
-     LIMIT 1"
-);
-$collection_update_alert_stmt->bind_param("i", $user_id);
-$collection_update_alert_stmt->execute();
-$collection_update_alert = $collection_update_alert_stmt->get_result()->fetch_assoc() ?: null;
-$collection_update_alert_stmt->close();
-
-if ($collection_update_alert !== null) {
-    $alert_id = (int)$collection_update_alert['id'];
-    $mark_read_stmt = $dbc->prepare("UPDATE collection_value_update_alerts SET is_read = 1 WHERE id = ?");
-    $mark_read_stmt->bind_param("i", $alert_id);
      LIMIT 5"
 );
 $collection_update_alerts_stmt->bind_param("i", $user_id);
@@ -348,22 +335,6 @@ mysqli_close($dbc);
 
 <div class="container my-4">
 
-    <?php if ($collection_update_alert !== null): ?>
-    <div class="alert alert-info alert-dismissible fade show mb-4" style="border-color:rgba(147,197,253,0.4);background:rgba(147,197,253,0.08);">
-        <strong style="color:#93c5fd;"><i class="bi bi-graph-up-arrow me-2"></i>Collection Value Update</strong>
-        <?php
-            $trend = $collection_update_alert['trend'];
-            $isUp = $trend === 'up';
-            $isDown = $trend === 'down';
-            $trendLabel = $isUp ? 'Trending up' : ($isDown ? 'Trending down' : 'Unchanged');
-            $trendColor = $isUp ? '#4ade80' : ($isDown ? '#f87171' : '#e8e8e8');
-            $sourceLabel = $collection_update_alert['source'] === 'scryfall_import' ? 'Scryfall import' : 'price update';
-        ?>
-        <p class="mb-1 mt-2" style="color:#e8e8e8;">
-            After <strong><?= htmlspecialchars($sourceLabel) ?></strong>, your collection is
-            <strong style="color:<?= $trendColor ?>;"><?= $trendLabel ?></strong>
-            (was <strong>$<?= number_format((float)$collection_update_alert['previous_value'], 2) ?></strong>, now <strong>$<?= number_format((float)$collection_update_alert['current_value'], 2) ?></strong>).
-        </p>
     <?php if (!empty($collection_update_alerts)): ?>
     <div class="alert alert-info alert-dismissible fade show mb-4" style="border-color:rgba(147,197,253,0.4);background:rgba(147,197,253,0.08);">
         <strong style="color:#93c5fd;"><i class="bi bi-graph-up-arrow me-2"></i>Collection Value Update<?= count($collection_update_alerts) > 1 ? 's' : '' ?></strong>
