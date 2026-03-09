@@ -28,7 +28,7 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 
 ![screenshot](/mtg-manager/img/dev015.png)
 
-#### Decks Table
+##### Decks Table
 
 ![screenshot](/mtg-manager/img/dev016.png)
 
