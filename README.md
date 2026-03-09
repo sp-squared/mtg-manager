@@ -21,45 +21,45 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 
 ### Create Account Page
 
-![screenshot](/mtg-manager/images/dev01.png)
+![screenshot](/mtg-manager/img/dev01.png)
 
 ### Login Page
 
-![screenshot](/mtg-manager/images/dev02.png)
+![screenshot](/mtg-manager/img/dev02.png)
 
 ### Dashboard
 
-![screenshot](/mtg-manager/images/dev03.png)
-![screenshot](/mtg-manager/images/dev04.png)
+![screenshot](/mtg-manager/img/dev03.png)
+![screenshot](/mtg-manager/img/dev04.png)
 
 ### Card Search
 
-![screenshot](/mtg-manager/images/dev05.png)
+![screenshot](/mtg-manager/img/dev05.png)
 
 ### Card Collection
 
-![screenshot](/mtg-manager/images/dev06.png)
+![screenshot](/mtg-manager/img/dev06.png)
 
 ### My Decks Page
 
-![screenshot](/mtg-manager/images/dev07.png)
+![screenshot](/mtg-manager/img/dev07.png)
 
 ### Import Deck Page
 
-![screenshot](/mtg-manager/images/dev08.png)
+![screenshot](/mtg-manager/img/dev08.png)
 
 ### Bulk Import Cards Page
 
-![screenshot](/mtg-manager/images/dev09.png)
+![screenshot](/mtg-manager/img/dev09.png)
 
 ### Price Alerts Page
 
-![screenshot](/mtg-manager/images/dev10.png)
+![screenshot](/mtg-manager/img/dev10.png)
 
 ### Profile Page
 
-![screenshot](/mtg-manager/images/dev11.png)
-![screenshot](/mtg-manager/images/dev12.png)
+![screenshot](/mtg-manager/img/dev11.png)
+![screenshot](/mtg-manager/img/dev12.png)
 
 ## Features
 
