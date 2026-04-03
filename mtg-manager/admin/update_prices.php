@@ -80,19 +80,6 @@ function prog(string $msg, string $color = '#e8e8e8'): void {
 }
 
 function recordCollectionUpdateAlerts(mysqli $dbc, string $source): void {
-    $dbc->query("CREATE TABLE IF NOT EXISTS collection_value_update_alerts (
-        id             BIGINT AUTO_INCREMENT PRIMARY KEY,
-        user_id        INT NOT NULL,
-        source         VARCHAR(40) NOT NULL,
-        previous_value DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-        current_value  DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-        trend          ENUM('up','down','unchanged') NOT NULL,
-        created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        is_read        TINYINT(1) NOT NULL DEFAULT 0,
-        INDEX idx_user_unread (user_id, is_read, created_at),
-        INDEX idx_user_latest (user_id, id)
-    )");
-
     $sql = "INSERT INTO collection_value_update_alerts (user_id, source, previous_value, current_value, trend)
             SELECT p.id,
                    ?,
@@ -240,44 +227,7 @@ $running = ($_SERVER['REQUEST_METHOD'] === 'POST');
 flush_prices('');
 
 // ── Step 1: Ensure tables exist ───────────────────────────────────────────────
-prog('Ensuring price tables exist…', '#c9a227');
-
-$dbc->query("
-    CREATE TABLE IF NOT EXISTS card_prices (
-        card_id        VARCHAR(36) NOT NULL PRIMARY KEY,
-        price_usd      DECIMAL(10,2) NULL,
-        price_usd_foil DECIMAL(10,2) NULL,
-        price_eur      DECIMAL(10,2) NULL,
-        price_eur_foil DECIMAL(10,2) NULL,
-        price_tix      DECIMAL(10,2) NULL,
-        updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )
-");
-if ($dbc->errno) {
-    prog('ERROR creating card_prices: ' . $dbc->error, '#f87171');
-    goto done_prices;
-}
-
-$dbc->query("
-    CREATE TABLE IF NOT EXISTS card_price_history (
-        id             BIGINT AUTO_INCREMENT PRIMARY KEY,
-        card_id        VARCHAR(36) NOT NULL,
-        price_usd      DECIMAL(10,2) NULL,
-        price_usd_foil DECIMAL(10,2) NULL,
-        price_eur      DECIMAL(10,2) NULL,
-        price_eur_foil DECIMAL(10,2) NULL,
-        price_tix      DECIMAL(10,2) NULL,
-        recorded_date  DATE NOT NULL,
-        UNIQUE KEY uq_card_date (card_id, recorded_date),
-        INDEX idx_card   (card_id),
-        INDEX idx_date   (recorded_date)
-    )
-");
-if ($dbc->errno) {
-    prog('ERROR creating card_price_history: ' . $dbc->error, '#f87171');
-    goto done_prices;
-}
-prog('Tables ready.', '#75b798');
+prog('Price tables ready.', '#75b798');
 
 // ── Step 2: Fetch manifest ────────────────────────────────────────────────────
 prog('Fetching Scryfall bulk data manifest…', '#c9a227');

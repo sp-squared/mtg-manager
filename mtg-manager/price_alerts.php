@@ -14,19 +14,6 @@ if (!isLoggedIn()) {
 }
 $user_id = getUserId();
 
-// Auto-create table
-$dbc->query("CREATE TABLE IF NOT EXISTS price_alerts (
-    id            INT AUTO_INCREMENT PRIMARY KEY,
-    user_id       INT NOT NULL,
-    card_id       VARCHAR(36) NOT NULL,
-    target_price  DECIMAL(10,2) NOT NULL,
-    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    triggered_at  DATETIME NULL,
-    is_active     TINYINT(1) NOT NULL DEFAULT 1,
-    INDEX idx_user_active (user_id, is_active),
-    UNIQUE KEY uq_user_card (user_id, card_id)
-)");
-
 // Handle edit
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_alert_id'], $_POST['new_target_price'])) {
     requireCsrf();

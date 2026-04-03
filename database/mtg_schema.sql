@@ -261,6 +261,66 @@ CREATE TABLE IF NOT EXISTS login_attempts (
     INDEX idx_username_time (username, attempted_at)
 );
 
+-- -----------------------------------------------------------------------------
+-- 12. RECENTLY VIEWED CARDS
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS recently_viewed (
+    id        INT         AUTO_INCREMENT PRIMARY KEY,
+    user_id   INT         NOT NULL,
+    card_id   VARCHAR(36) NOT NULL,
+    viewed_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_user_card (user_id, card_id),
+    INDEX idx_user_viewed (user_id, viewed_at),
+    FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE,
+    FOREIGN KEY (card_id) REFERENCES cards(id)  ON DELETE CASCADE
+);
+
+-- -----------------------------------------------------------------------------
+-- 13. PRICE ALERTS
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS price_alerts (
+    id           INT            AUTO_INCREMENT PRIMARY KEY,
+    user_id      INT            NOT NULL,
+    card_id      VARCHAR(36)    NOT NULL,
+    target_price DECIMAL(10,2)  NOT NULL,
+    created_at   DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    triggered_at DATETIME       NULL,
+    is_active    TINYINT(1)     NOT NULL DEFAULT 1,
+    INDEX idx_user_active (user_id, is_active),
+    UNIQUE KEY uq_user_card (user_id, card_id),
+    FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE,
+    FOREIGN KEY (card_id) REFERENCES cards(id)  ON DELETE CASCADE
+);
+
+-- -----------------------------------------------------------------------------
+-- 14. COLLECTION VALUE TRACKING
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS collection_value_history (
+    id            INT            AUTO_INCREMENT PRIMARY KEY,
+    user_id       INT            NOT NULL,
+    recorded_date DATE           NOT NULL,
+    total_value   DECIMAL(12,2)  NOT NULL DEFAULT 0,
+    priced_count  INT            NOT NULL DEFAULT 0,
+    total_cards   INT            NOT NULL DEFAULT 0,
+    UNIQUE KEY uq_user_date (user_id, recorded_date),
+    INDEX idx_user_history (user_id, recorded_date),
+    FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS collection_value_update_alerts (
+    id             BIGINT         AUTO_INCREMENT PRIMARY KEY,
+    user_id        INT            NOT NULL,
+    source         VARCHAR(40)    NOT NULL,
+    previous_value DECIMAL(12,2)  NOT NULL DEFAULT 0.00,
+    current_value  DECIMAL(12,2)  NOT NULL DEFAULT 0.00,
+    trend          ENUM('up','down','unchanged') NOT NULL,
+    created_at     DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_read        TINYINT(1)     NOT NULL DEFAULT 0,
+    INDEX idx_user_unread (user_id, is_read, created_at),
+    INDEX idx_user_latest (user_id, id),
+    FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE
+);
+
 -- =============================================================================
 -- UPGRADE MIGRATIONS — existing databases only
 -- These ALTER statements are safe to run on a live database.
@@ -344,15 +404,6 @@ DELIMITER ;
 CALL _add_col();
 DROP PROCEDURE IF EXISTS _add_col;
 
--- login_attempts table (idempotent)
-CREATE TABLE IF NOT EXISTS login_attempts (
-    id           INT AUTO_INCREMENT PRIMARY KEY,
-    username     VARCHAR(50)  NOT NULL,
-    attempted_at DATETIME     NOT NULL DEFAULT NOW(),
-    event_type   VARCHAR(20)  NOT NULL DEFAULT 'failed',
-    INDEX idx_username_time (username, attempted_at)
-);
-
 -- login_attempts: event_type column
 DROP PROCEDURE IF EXISTS _add_col;
 DELIMITER $$
@@ -416,73 +467,6 @@ END$$
 DELIMITER ;
 CALL _add_col();
 DROP PROCEDURE IF EXISTS _add_col;
-
--- daily_cards gap-fill procedure and scheduler
-DROP PROCEDURE IF EXISTS fill_daily_card_gaps;
-DELIMITER $$
-CREATE PROCEDURE fill_daily_card_gaps()
-BEGIN
-    IF (SELECT COUNT(*) FROM daily_cards) > 0 THEN
-        INSERT IGNORE INTO daily_cards (card_id, display_date)
-        SELECT
-            (SELECT c.id FROM cards c
-             WHERE c.type_line NOT LIKE '%Token%'
-               AND c.type_line NOT LIKE '%Basic Land%'
-               AND c.image_uri IS NOT NULL
-               AND c.id NOT IN (SELECT card_id FROM daily_cards)
-             ORDER BY RAND() LIMIT 1),
-            gap_date.d
-        FROM (
-            WITH RECURSIVE date_series AS (
-                SELECT MIN(display_date) AS d FROM daily_cards
-                UNION ALL
-                SELECT DATE_ADD(d, INTERVAL 1 DAY) FROM date_series WHERE d < CURDATE()
-            )
-            SELECT d FROM date_series
-            LEFT JOIN daily_cards ON daily_cards.display_date = d
-            WHERE daily_cards.display_date IS NULL
-        ) AS gap_date
-        WHERE gap_date.d IS NOT NULL;
-    END IF;
-END$$
-DELIMITER ;
-
-DROP EVENT IF EXISTS daily_card_gap_fill;
-CREATE EVENT daily_card_gap_fill
-    ON SCHEDULE EVERY 1 DAY
-    STARTS (CURDATE() + INTERVAL 1 DAY)
-    DO CALL fill_daily_card_gaps();
-
--- Enable event scheduler (run once as root if not already set):
--- SET GLOBAL event_scheduler = ON;
-
--- card_prices table (idempotent)
-CREATE TABLE IF NOT EXISTS card_prices (
-    card_id        VARCHAR(50)   NOT NULL PRIMARY KEY,
-    price_usd      DECIMAL(10,2) NULL,
-    price_usd_foil DECIMAL(10,2) NULL,
-    price_eur      DECIMAL(10,2) NULL,
-    price_eur_foil DECIMAL(10,2) NULL,
-    price_tix      DECIMAL(10,2) NULL,
-    updated_at     TIMESTAMP     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
-);
-
--- card_price_history table (idempotent)
-CREATE TABLE IF NOT EXISTS card_price_history (
-    id             BIGINT        AUTO_INCREMENT PRIMARY KEY,
-    card_id        VARCHAR(50)   NOT NULL,
-    price_usd      DECIMAL(10,2) NULL,
-    price_usd_foil DECIMAL(10,2) NULL,
-    price_eur      DECIMAL(10,2) NULL,
-    price_eur_foil DECIMAL(10,2) NULL,
-    price_tix      DECIMAL(10,2) NULL,
-    recorded_date  DATE          NOT NULL,
-    UNIQUE KEY uq_card_date (card_id, recorded_date),
-    INDEX idx_card (card_id),
-    INDEX idx_date (recorded_date),
-    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
-);
 
 -- =============================================================================
 -- END OF SCHEMA

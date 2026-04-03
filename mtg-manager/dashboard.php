@@ -62,16 +62,6 @@ while ($r = mysqli_fetch_assoc($fav_result)) $fav_rows[] = $r;
 $fav_count = count($fav_rows);
 
 // Recently viewed (last 8 by viewed_at, cross-page tracking)
-$recently_viewed_table_stmt = $dbc->prepare("CREATE TABLE IF NOT EXISTS recently_viewed (
-    id        INT AUTO_INCREMENT PRIMARY KEY,
-    user_id   INT NOT NULL,
-    card_id   VARCHAR(36) NOT NULL,
-    viewed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_user_card (user_id, card_id),
-    INDEX idx_user_viewed (user_id, viewed_at)
-)");
-$recently_viewed_table_stmt->execute();
-$recently_viewed_table_stmt->close();
 $recent_stmt = $dbc->prepare(
     "SELECT c.id, c.name, c.image_uri, c.rarity, c.mana_cost, s.name as set_name,
             rv.viewed_at
@@ -87,19 +77,6 @@ $recent_stmt->execute();
 $recent_result = $recent_stmt->get_result();
 
 // ── Price Alerts check ────────────────────────────────────────────────────────
-$price_alerts_table_stmt = $dbc->prepare("CREATE TABLE IF NOT EXISTS price_alerts (
-    id            INT AUTO_INCREMENT PRIMARY KEY,
-    user_id       INT NOT NULL,
-    card_id       VARCHAR(36) NOT NULL,
-    target_price  DECIMAL(10,2) NOT NULL,
-    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    triggered_at  DATETIME NULL,
-    is_active     TINYINT(1) NOT NULL DEFAULT 1,
-    INDEX idx_user_active (user_id, is_active),
-    UNIQUE KEY uq_user_card (user_id, card_id)
-)");
-$price_alerts_table_stmt->execute();
-$price_alerts_table_stmt->close();
 $triggered_alerts = [];
 $pa_stmt = $dbc->prepare(
     "SELECT pa.id, pa.target_price, c.name, cp.price_usd
@@ -128,18 +105,6 @@ if (!empty($triggered_alerts)) {
 }
 
 // ── Collection Value History ──────────────────────────────────────────────────
-$value_history_table_stmt = $dbc->prepare("CREATE TABLE IF NOT EXISTS collection_value_history (
-    id           INT AUTO_INCREMENT PRIMARY KEY,
-    user_id      INT NOT NULL,
-    recorded_date DATE NOT NULL,
-    total_value  DECIMAL(12,2) NOT NULL DEFAULT 0,
-    priced_count INT NOT NULL DEFAULT 0,
-    total_cards  INT NOT NULL DEFAULT 0,
-    UNIQUE KEY uq_user_date (user_id, recorded_date),
-    INDEX idx_user_history (user_id, recorded_date)
-)");
-$value_history_table_stmt->execute();
-$value_history_table_stmt->close();
 
 // Record today's snapshot (once per day — ON DUPLICATE KEY ignores repeats)
 if ($collection_value !== null) {
@@ -181,20 +146,6 @@ $hist_rows = $hist_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $hist_stmt->close();
 
 // ── Collection Update Alerts ───────────────────────────────────────────────
-$collection_update_alerts_table_stmt = $dbc->prepare("CREATE TABLE IF NOT EXISTS collection_value_update_alerts (
-    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id        INT NOT NULL,
-    source         VARCHAR(40) NOT NULL,
-    previous_value DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-    current_value  DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-    trend          ENUM('up','down','unchanged') NOT NULL,
-    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    is_read        TINYINT(1) NOT NULL DEFAULT 0,
-    INDEX idx_user_unread (user_id, is_read, created_at),
-    INDEX idx_user_latest (user_id, id)
-)");
-$collection_update_alerts_table_stmt->execute();
-$collection_update_alerts_table_stmt->close();
 
 $collection_update_alerts = [];
 $collection_update_alerts_stmt = $dbc->prepare(
@@ -221,15 +172,6 @@ if (!empty($collection_update_alerts)) {
 }
 
 // ── Daily Cards pile ──────────────────────────────────────────────────────────
-// Auto-create table if it doesn't exist
-$daily_cards_table_stmt = $dbc->prepare("CREATE TABLE IF NOT EXISTS daily_cards (
-    id           INT AUTO_INCREMENT PRIMARY KEY,
-    card_id      VARCHAR(36) NOT NULL,
-    display_date DATE NOT NULL UNIQUE,
-    INDEX idx_date (display_date)
-)");
-$daily_cards_table_stmt->execute();
-$daily_cards_table_stmt->close();
 
 // Use MySQL CURDATE() as single source of truth for today's date.
 $today_stmt = $dbc->prepare("SELECT CURDATE() AS today");

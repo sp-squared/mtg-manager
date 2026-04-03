@@ -25,6 +25,7 @@
 | `recently_viewed`          | Per-user card view history (upserted on each modal open)      |
 | `collection_value_history` | Daily total collection value snapshots per user               |
 | `price_alerts`             | Per-user target prices; marked triggered when price is hit    |
+| `collection_value_update_alerts` | Alerts generated when collection value changes after price/import updates |
 
 ### Notable Design Decisions
 
@@ -33,11 +34,11 @@
 - `daily_cards` uses a recursive CTE to generate a full date series and backfill any gaps between the earliest record and `CURDATE()`
 - `card_prices` is keyed on `card_id` as the primary key — upserted on every price update run, always reflects the latest known price
 - `card_price_history` uses a `UNIQUE KEY (card_id, recorded_date)` with `ON DUPLICATE KEY UPDATE` so running the updater multiple times in one day refreshes rather than duplicates today's snapshot
-- Both price tables are created automatically on first run of `admin/update_prices.php` — no migration needed for existing installs
+- Both price tables are defined in the schema and must exist before running `admin/update_prices.php`
 - `recently_viewed` uses a `UNIQUE KEY (user_id, card_id)` with `ON DUPLICATE KEY UPDATE viewed_at = NOW()` — one row per user/card pair, always reflects the most recent view time
 - `collection_value_history` uses a `UNIQUE KEY (user_id, recorded_date)` with `ON DUPLICATE KEY UPDATE` — snapshot recorded on dashboard visit, refreshed if visited again the same day
 - `price_alerts` uses a `UNIQUE KEY (user_id, card_id)` so setting a new target for the same card replaces the old one; `is_active` is set to 0 and `triggered_at` recorded when the condition is first met
-- New tables (`recently_viewed`, `collection_value_history`, `price_alerts`) are created automatically via `CREATE TABLE IF NOT EXISTS` on first page load — no manual migration required
+- All tables are defined in `database/mtg_schema.sql` — run it once against a fresh database to create everything
 - All schema migrations use `information_schema.COLUMNS` checks wrapped in temporary stored procedures for compatibility with MySQL versions that do not support `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
 
 ---

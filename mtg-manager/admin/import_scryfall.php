@@ -84,19 +84,6 @@ function progress(string $msg, string $color = '#e8e8e8'): void {
 }
 
 function recordCollectionUpdateAlerts(mysqli $dbc, string $source): void {
-    $dbc->query("CREATE TABLE IF NOT EXISTS collection_value_update_alerts (
-        id             BIGINT AUTO_INCREMENT PRIMARY KEY,
-        user_id        INT NOT NULL,
-        source         VARCHAR(40) NOT NULL,
-        previous_value DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-        current_value  DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-        trend          ENUM('up','down','unchanged') NOT NULL,
-        created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        is_read        TINYINT(1) NOT NULL DEFAULT 0,
-        INDEX idx_user_unread (user_id, is_read, created_at),
-        INDEX idx_user_latest (user_id, id)
-    )");
-
     $sql = "INSERT INTO collection_value_update_alerts (user_id, source, previous_value, current_value, trend)
             SELECT p.id,
                    ?,
