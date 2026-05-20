@@ -189,7 +189,11 @@ $val_priced_cards   = (int)($val_row['priced_cards'] ?? 0);
 $sql = "SELECT c.id, c.name, c.mana_cost, c.cmc, c.type_line, c.oracle_text, c.rarity,
                c.power, c.toughness, c.image_uri, c.flavor_text, c.keywords,
                s.name as set_name, uc.quantity,
-               cp.price_usd, cp.price_usd_foil, cp.price_eur, cp.updated_at as price_updated_at
+               cp.price_usd, cp.price_usd_foil, cp.price_eur, cp.updated_at as price_updated_at,
+               (SELECT COUNT(DISTINCT dc.deck_id)
+                FROM deck_cards dc
+                JOIN decks d ON d.id = dc.deck_id AND d.user_id = uc.user_id
+                WHERE dc.card_id = uc.card_id) AS deck_count
         FROM user_collection uc
         JOIN cards c ON uc.card_id = c.id
         LEFT JOIN sets s ON c.set_id = s.id
@@ -409,6 +413,15 @@ $result = $stmt->get_result();
                                 <strong>P/T:</strong> <?= $pt ?><br>
                                 <strong>Rarity:</strong> <?= htmlspecialchars($row['rarity']) ?><br>
                                 <strong>Owned:</strong> <?= $row['quantity'] ?>
+                                <?php if ((int)$row['deck_count'] > 0): ?>
+                                <br>
+                                <a href="decks.php" class="text-decoration-none">
+                                    <span class="badge mt-1"
+                                          style="background:rgba(201,162,39,0.15);color:#c9a227;border:1px solid rgba(201,162,39,0.3);font-weight:400;">
+                                        <i class="bi bi-journals me-1"></i>In <?= (int)$row['deck_count'] ?> deck<?= (int)$row['deck_count'] !== 1 ? 's' : '' ?>
+                                    </span>
+                                </a>
+                                <?php endif; ?>
                                 <?php if ($row['price_usd'] !== null): ?>
                                 <br><strong>Price:</strong>
                                 <span style="color:#c9a227;">$<?= number_format((float)$row['price_usd'], 2) ?></span>

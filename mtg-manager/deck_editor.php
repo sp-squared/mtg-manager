@@ -306,6 +306,26 @@ if ($fork_template) {
     usort($diff_modified, fn($a,$b) => strcmp($a['name'], $b['name']));
 }
 
+// Collection coverage — how many of the deck's required copies the user owns
+$cov_stmt = $dbc->prepare(
+    "SELECT SUM(dc.quantity) as total_needed,
+            SUM(LEAST(dc.quantity, COALESCE(uc.quantity, 0))) as total_owned
+     FROM deck_cards dc
+     JOIN cards c ON c.id = dc.card_id
+     LEFT JOIN user_collection uc ON uc.card_id = dc.card_id AND uc.user_id = ?
+     WHERE dc.deck_id = ?
+       AND dc.zone != 'tokens'
+       AND c.type_line NOT LIKE '%Token%'"
+);
+$cov_stmt->bind_param("ii", $user_id, $deck_id);
+$cov_stmt->execute();
+$cov_row    = $cov_stmt->get_result()->fetch_assoc();
+$cov_stmt->close();
+$cov_needed = (int)($cov_row['total_needed'] ?? 0);
+$cov_owned  = (int)($cov_row['total_owned']  ?? 0);
+$cov_pct    = $cov_needed > 0 ? round($cov_owned / $cov_needed * 100) : 0;
+$cov_color  = $cov_pct === 100 ? '#4ade80' : ($cov_pct >= 75 ? '#c9a227' : '#f87171');
+
 // Default format for legality checker: template format → size heuristic → standard
 $default_legality_format = 'standard';
 if ($fork_template && !empty($fork_template['template_format'])) {
@@ -408,6 +428,15 @@ if ($fork_template && !empty($fork_template['template_format'])) {
             <div class="card shadow-sm h-100">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">Your Collection</h5>
+                </div>
+                <div class="px-3 pt-2 pb-1 d-flex gap-2 align-items-center"
+                     style="background:rgba(13,110,253,0.08);border-bottom:1px solid rgba(255,255,255,0.07);">
+                    <input type="text" id="col-filter-input" class="form-control form-control-sm"
+                           placeholder="Filter by name…"
+                           style="max-width:200px;background:#1a1a2e;color:#e8e8e8;border-color:rgba(255,255,255,0.15);">
+                    <label class="small mb-0 d-flex align-items-center gap-1 text-nowrap" style="color:#8899aa;cursor:pointer;">
+                        <input type="checkbox" id="col-hide-full"> Hide fully added
+                    </label>
                 </div>
                 <div class="card-body deck-panel-scroll" id="collection-panel-body" style="max-height: 70vh; overflow-y: auto;">
                     <?php
@@ -635,6 +664,22 @@ if ($fork_template && !empty($fork_template['template_format'])) {
                             </span>
                         </div>
                     </div>
+
+                    <?php if ($cov_needed > 0): ?>
+                    <div class="mt-3 pt-2" style="border-top:1px solid rgba(201,162,39,0.12);">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small" style="color:#8899aa;">
+                                <i class="bi bi-collection me-1"></i>Collection Coverage
+                            </span>
+                            <span class="small fw-bold" style="color:<?= $cov_color ?>;">
+                                <?= $cov_owned ?> / <?= $cov_needed ?> (<?= $cov_pct ?>%)
+                            </span>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.08);border-radius:4px;height:6px;overflow:hidden;">
+                            <div style="width:<?= $cov_pct ?>%;height:100%;background:<?= $cov_color ?>;border-radius:4px;"></div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -1206,6 +1251,7 @@ async function refreshPanels() {
         deckPanel.scrollTop = deckScroll;
 
         attachDeckListeners();
+        if (window._afterPanelRefresh) window._afterPanelRefresh();
     } catch(e) {
         showToast('Network error refreshing panels', 'danger');
     }
@@ -1308,6 +1354,33 @@ document.querySelectorAll('.add-missing-to-wishlist').forEach(btn => {
         }
     });
 });
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Collection panel filter ───────────────────────────────────────────────────
+(function () {
+    function applyColFilter() {
+        const term     = (document.getElementById('col-filter-input')?.value ?? '').toLowerCase();
+        const hideFull = document.getElementById('col-hide-full')?.checked ?? false;
+        const tbody    = document.querySelector('#collection-panel-body tbody');
+        if (!tbody) return;
+        tbody.querySelectorAll('tr').forEach(row => {
+            const name    = (row.cells[0]?.textContent ?? '').toLowerCase();
+            const addBtn  = row.querySelector('.add-to-deck-btn');
+            const isFull  = !addBtn; // no button = at limit
+            const visible = name.includes(term) && !(hideFull && isFull);
+            row.style.display = visible ? '' : 'none';
+        });
+    }
+
+    document.getElementById('col-filter-input')
+        ?.addEventListener('input', applyColFilter);
+    document.getElementById('col-hide-full')
+        ?.addEventListener('change', applyColFilter);
+
+    // Re-apply after AJAX panel refresh
+    const _orig = window._afterPanelRefresh ?? (() => {});
+    window._afterPanelRefresh = () => { _orig(); applyColFilter(); };
+})();
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Legality Checker ─────────────────────────────────────────────────────────
