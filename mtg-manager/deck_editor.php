@@ -43,12 +43,12 @@ function truncate($string, $length = 16, $append = '…') {
 // Total card count
 $total_stmt = $dbc->prepare(
     "SELECT SUM(dc.quantity) as total,
-            SUM(IF(dc.is_sideboard=0 AND c.type_line NOT LIKE '%Token%', dc.quantity, 0)) as main_count,
-            SUM(IF(dc.is_sideboard=1 AND c.type_line NOT LIKE '%Token%', dc.quantity, 0)) as side_count,
-            SUM(IF(c.type_line LIKE '%Token%', dc.quantity, 0)) as token_qty,
-            SUM(IF(dc.is_sideboard=0 AND c.type_line NOT LIKE '%Token%', 1, 0)) as unique_main,
-            SUM(IF(dc.is_sideboard=1 AND c.type_line NOT LIKE '%Token%', 1, 0)) as unique_side,
-            SUM(IF(c.type_line LIKE '%Token%', 1, 0)) as unique_tokens
+            SUM(IF(dc.zone='mainboard', dc.quantity, 0)) as main_count,
+            SUM(IF(dc.zone='sideboard', dc.quantity, 0)) as side_count,
+            SUM(IF(dc.zone='tokens',   dc.quantity, 0)) as token_qty,
+            SUM(IF(dc.zone='mainboard', 1, 0)) as unique_main,
+            SUM(IF(dc.zone='sideboard', 1, 0)) as unique_side,
+            SUM(IF(dc.zone='tokens',   1, 0)) as unique_tokens
      FROM deck_cards dc
      JOIN cards c ON c.id = dc.card_id
      WHERE dc.deck_id = ?");
@@ -124,16 +124,14 @@ if (count($active_colors) === 1) {
 // Type breakdown for summary
 $type_stmt = $dbc->prepare(
     "SELECT
-        SUM(IF(c.type_line LIKE '%Token%',       dc.quantity, 0)) as tokens,
-        SUM(IF(c.type_line LIKE '%Creature%' AND c.type_line NOT LIKE '%Token%', dc.quantity, 0)) as creatures,
+        SUM(IF(c.type_line LIKE '%Creature%', dc.quantity, 0)) as creatures,
         SUM(IF(c.type_line LIKE '%Instant%',     dc.quantity, 0)) as instants,
         SUM(IF(c.type_line LIKE '%Sorcery%',     dc.quantity, 0)) as sorceries,
         SUM(IF(c.type_line LIKE '%Enchantment%', dc.quantity, 0)) as enchantments,
         SUM(IF(c.type_line LIKE '%Artifact%',    dc.quantity, 0)) as artifacts,
         SUM(IF(c.type_line LIKE '%Planeswalker%',dc.quantity, 0)) as planeswalkers,
         SUM(IF(c.type_line LIKE '%Land%',        dc.quantity, 0)) as lands,
-        SUM(IF(c.type_line LIKE '%Token%',       1, 0)) as u_tokens,
-        SUM(IF(c.type_line LIKE '%Creature%' AND c.type_line NOT LIKE '%Token%', 1, 0)) as u_creatures,
+        SUM(IF(c.type_line LIKE '%Creature%', 1, 0)) as u_creatures,
         SUM(IF(c.type_line LIKE '%Instant%',     1, 0)) as u_instants,
         SUM(IF(c.type_line LIKE '%Sorcery%',     1, 0)) as u_sorceries,
         SUM(IF(c.type_line LIKE '%Enchantment%', 1, 0)) as u_enchantments,
@@ -142,7 +140,7 @@ $type_stmt = $dbc->prepare(
         SUM(IF(c.type_line LIKE '%Land%',        1, 0)) as u_lands
      FROM deck_cards dc
      JOIN cards c ON dc.card_id = c.id
-     WHERE dc.deck_id = ? AND dc.is_sideboard = 0");
+     WHERE dc.deck_id = ? AND dc.zone = 'mainboard'");
 $type_stmt->bind_param("i", $deck_id);
 $type_stmt->execute();
 $types = $type_stmt->get_result()->fetch_assoc();
@@ -154,10 +152,9 @@ $singleton_stmt = $dbc->prepare(
      FROM deck_cards dc
      JOIN cards c ON dc.card_id = c.id
      WHERE dc.deck_id = ?
-       AND dc.is_sideboard = 0
+       AND dc.zone = 'mainboard'
        AND dc.quantity > 1
-       AND c.type_line NOT LIKE '%Basic Land%'
-       AND c.type_line NOT LIKE '%Token%'"
+       AND c.type_line NOT LIKE '%Basic Land%'"
 );
 $singleton_stmt->bind_param("i", $deck_id);
 $singleton_stmt->execute();
@@ -173,9 +170,8 @@ $curve_stmt = $dbc->prepare(
     "SELECT LEAST(FLOOR(c.cmc), 7) as cmc_bucket, SUM(dc.quantity) as cnt
      FROM deck_cards dc
      JOIN cards c ON dc.card_id = c.id
-     WHERE dc.deck_id = ? AND dc.is_sideboard = 0
+     WHERE dc.deck_id = ? AND dc.zone = 'mainboard'
        AND c.type_line NOT LIKE '%Land%'
-       AND c.type_line NOT LIKE '%Token%'
      GROUP BY cmc_bucket
      ORDER BY cmc_bucket"
 );
@@ -197,7 +193,7 @@ $token_stmt = $dbc->prepare(
     "SELECT c.id, c.name, c.type_line, c.power, c.toughness, c.image_uri, dc.quantity
      FROM deck_cards dc
      JOIN cards c ON dc.card_id = c.id
-     WHERE dc.deck_id = ? AND c.type_line LIKE '%Token%'
+     WHERE dc.deck_id = ? AND dc.zone = 'tokens'
      ORDER BY c.name");
 $token_stmt->bind_param("i", $deck_id);
 $token_stmt->execute();
@@ -217,7 +213,7 @@ $missing_stmt = $dbc->prepare(
      LEFT JOIN user_collection uc ON uc.card_id = dc.card_id AND uc.user_id = ?
      LEFT JOIN card_prices cp ON cp.card_id = dc.card_id
      WHERE dc.deck_id = ?
-       AND c.type_line NOT LIKE '%Token%'
+       AND dc.zone != 'tokens'
        AND (uc.quantity IS NULL OR uc.quantity < dc.quantity)
      ORDER BY c.name"
 );
@@ -406,13 +402,13 @@ foreach ($missing_cards as $mc) {
                 <div class="card-body deck-panel-scroll" id="deck-panel-body" style="max-height: 70vh; overflow-y: auto;">
                     <?php
                     $deck_query = "SELECT c.id, c.name, c.mana_cost, c.type_line,
-                                          dc.quantity, dc.is_sideboard,
+                                          dc.quantity, dc.zone,
                                           uc.quantity as owned
                                    FROM deck_cards dc
                                    JOIN cards c ON dc.card_id = c.id
                                    LEFT JOIN user_collection uc ON uc.card_id = c.id AND uc.user_id = ?
                                    WHERE dc.deck_id = ?
-                                   ORDER BY dc.is_sideboard, c.name";
+                                   ORDER BY dc.zone, c.name";
                     $deck_stmt = $dbc->prepare($deck_query);
                     $deck_stmt->bind_param("ii", $user_id, $deck_id);
                     $deck_stmt->execute();
@@ -424,7 +420,7 @@ foreach ($missing_cards as $mc) {
                         <table class="table table-sm table-hover" style="color:#e8e8e8;">
                             <thead>
                                 <tr style="color:#c9a227;">
-                                    <th>Card</th><th>Mana</th><th>Type</th><th>Qty</th><th>Side?</th><th>Actions</th>
+                                    <th>Card</th><th>Mana</th><th>Type</th><th>Qty</th><th>Zone</th><th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -434,7 +430,7 @@ foreach ($missing_cards as $mc) {
                                 <tr>
                                     <td title="<?= htmlspecialchars($card['name']) ?>">
                                         <?= htmlspecialchars(truncate($card['name'])) ?>
-                                        <?php if (strpos($card['type_line'], 'Token') !== false && (int)$card['quantity'] > 1): ?>
+                                        <?php if ($card['zone'] === 'tokens' && (int)$card['quantity'] > 1): ?>
                                             <span style="color:#8899aa;font-size:0.78rem;"> ×<?= (int)$card['quantity'] ?></span>
                                         <?php endif; ?>
                                     </td>
@@ -446,7 +442,7 @@ foreach ($missing_cards as $mc) {
                                             <span style="color:#8899aa;font-size:0.78rem;" title="You own <?= $owned ?>">/ <?= $owned ?></span>
                                         <?php endif; ?>
                                     </td>
-                                    <td><?= $card['is_sideboard'] ? 'Yes' : 'Main' ?></td>
+                                    <td><?= ucfirst($card['zone']) ?></td>
                                     <td>
                                         <div class="d-flex flex-column gap-1 align-items-end">
                                             <button class="btn btn-sm btn-danger remove-from-deck-btn" style="min-width:130px;"
@@ -610,7 +606,6 @@ foreach ($missing_cards as $mc) {
                         </thead>
                         <?php
                         $type_labels = [
-                            'tokens'        => ['Tokens',        'bi-stars'],
                             'creatures'     => ['Creatures',     'bi-shield-fill'],
                             'instants'      => ['Instants',      'bi-lightning-fill'],
                             'sorceries'     => ['Sorceries',     'bi-magic'],

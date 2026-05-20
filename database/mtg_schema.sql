@@ -135,11 +135,11 @@ CREATE TABLE IF NOT EXISTS decks (
 );
 
 CREATE TABLE IF NOT EXISTS deck_cards (
-    deck_id      INT         NOT NULL,
-    card_id      VARCHAR(50) NOT NULL,
-    quantity     INT         DEFAULT 1,
-    is_sideboard BOOLEAN     DEFAULT FALSE,
-    PRIMARY KEY (deck_id, card_id, is_sideboard),
+    deck_id  INT         NOT NULL,
+    card_id  VARCHAR(50) NOT NULL,
+    quantity INT         DEFAULT 1,
+    zone     ENUM('mainboard','sideboard','commander','companion','maybeboard','tokens') NOT NULL DEFAULT 'mainboard',
+    PRIMARY KEY (deck_id, card_id, zone),
     FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE,
     FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
 );
@@ -467,6 +467,63 @@ END$$
 DELIMITER ;
 CALL _add_col();
 DROP PROCEDURE IF EXISTS _add_col;
+
+-- deck_cards: replace is_sideboard boolean with zone enum
+-- Backfills sideboard rows, rebuilds the composite PK, then drops is_sideboard.
+DROP PROCEDURE IF EXISTS _migrate_zone;
+DELIMITER $$
+CREATE PROCEDURE _migrate_zone()
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'deck_cards' AND COLUMN_NAME = 'zone'
+  ) THEN
+    ALTER TABLE deck_cards
+      ADD COLUMN zone ENUM('mainboard','sideboard','commander','companion','maybeboard','tokens')
+                      NOT NULL DEFAULT 'mainboard';
+    UPDATE deck_cards SET zone = 'sideboard' WHERE is_sideboard = 1;
+    -- Backfill token cards into the tokens zone
+    UPDATE deck_cards dc
+      JOIN cards c ON c.id = dc.card_id
+      SET dc.zone = 'tokens'
+      WHERE dc.zone = 'mainboard' AND c.type_line LIKE '%Token%';
+    ALTER TABLE deck_cards DROP PRIMARY KEY;
+    ALTER TABLE deck_cards ADD PRIMARY KEY (deck_id, card_id, zone);
+    ALTER TABLE deck_cards DROP COLUMN is_sideboard;
+  END IF;
+END$$
+DELIMITER ;
+CALL _migrate_zone();
+DROP PROCEDURE IF EXISTS _migrate_zone;
+
+-- deck_cards: widen zone ENUM to include 'tokens' and backfill token cards
+-- Safe to run on databases that already have the zone column.
+DROP PROCEDURE IF EXISTS _migrate_tokens_zone;
+DELIMITER $$
+CREATE PROCEDURE _migrate_tokens_zone()
+BEGIN
+  -- Widen ENUM only if 'tokens' is not already a valid value
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'deck_cards'
+      AND COLUMN_NAME  = 'zone'
+      AND COLUMN_TYPE LIKE '%tokens%'
+  ) THEN
+    ALTER TABLE deck_cards
+      MODIFY COLUMN zone
+        ENUM('mainboard','sideboard','commander','companion','maybeboard','tokens')
+        NOT NULL DEFAULT 'mainboard';
+  END IF;
+  -- Backfill any existing token cards still sitting in mainboard
+  UPDATE deck_cards dc
+    JOIN cards c ON c.id = dc.card_id
+    SET dc.zone = 'tokens'
+    WHERE dc.zone = 'mainboard' AND c.type_line LIKE '%Token%';
+END$$
+DELIMITER ;
+CALL _migrate_tokens_zone();
+DROP PROCEDURE IF EXISTS _migrate_tokens_zone;
 
 -- =============================================================================
 -- END OF SCHEMA

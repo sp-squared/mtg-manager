@@ -92,13 +92,13 @@ $col_s->close();
 
 // ── Deck contents panel ───────────────────────────────────────────────────────
 $deck_q = "SELECT c.id, c.name, c.mana_cost, c.type_line,
-                  dc.quantity, dc.is_sideboard,
+                  dc.quantity, dc.zone,
                   uc.quantity as owned
            FROM deck_cards dc
            JOIN cards c ON dc.card_id = c.id
            LEFT JOIN user_collection uc ON uc.card_id = c.id AND uc.user_id = ?
            WHERE dc.deck_id = ?
-           ORDER BY dc.is_sideboard, c.name";
+           ORDER BY dc.zone, c.name";
 $deck_s = $dbc->prepare($deck_q);
 $deck_s->bind_param("ii", $user_id, $deck_id);
 $deck_s->execute();
@@ -118,7 +118,7 @@ if ($deck_result->num_rows == 0): ?>
     <table class="table table-sm table-hover" style="color:#e8e8e8;">
         <thead>
             <tr style="color:#c9a227;">
-                <th>Card</th><th>Mana</th><th>Type</th><th>Qty</th><th>Side?</th><th>Actions</th>
+                <th>Card</th><th>Mana</th><th>Type</th><th>Qty</th><th>Zone</th><th>Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -135,7 +135,7 @@ if ($deck_result->num_rows == 0): ?>
                         <span style="color:#8899aa;font-size:0.78rem;" title="You own <?= $owned ?>">/ <?= $owned ?></span>
                     <?php endif; ?>
                 </td>
-                <td><?= $card['is_sideboard'] ? 'Yes' : 'Main' ?></td>
+                <td><?= ucfirst($card['zone']) ?></td>
                 <td>
                     <div class="d-flex flex-column gap-1 align-items-end">
                         <button class="btn btn-sm btn-danger remove-from-deck-btn" style="min-width:130px;"

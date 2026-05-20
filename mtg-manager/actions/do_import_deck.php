@@ -72,16 +72,26 @@ try {
     $valid_check->close();
 
     $card_ins = $dbc->prepare(
-        "INSERT INTO deck_cards (deck_id, card_id, quantity, is_sideboard)
+        "INSERT INTO deck_cards (deck_id, card_id, quantity, zone)
          VALUES (?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE quantity = VALUES(quantity)"
     );
+    $valid_zones = ['mainboard', 'sideboard', 'commander', 'companion', 'maybeboard', 'tokens'];
     foreach ($cards as $card) {
         $card_id = $card['card_id'];
         if (!isset($valid_set[$card_id])) continue;
         $qty  = (int)$card['quantity'];
-        $side = (int)$card['is_sideboard'];
-        $card_ins->bind_param("isii", $new_deck_id, $card_id, $qty, $side);
+        // Support both old exports (is_sideboard int) and new exports (zone string)
+        if (isset($card['zone']) && in_array($card['zone'], $valid_zones, true)) {
+            $zone = $card['zone'];
+        } else {
+            $zone = !empty($card['is_sideboard']) ? 'sideboard' : 'mainboard';
+        }
+        // Auto-assign token cards to tokens zone regardless of export format
+        if (str_contains($card['type_line'] ?? '', 'Token')) {
+            $zone = 'tokens';
+        }
+        $card_ins->bind_param("isis", $new_deck_id, $card_id, $qty, $zone);
         $card_ins->execute();
     }
     $card_ins->close();

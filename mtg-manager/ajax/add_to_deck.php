@@ -35,7 +35,7 @@ if (!$deck) {
 }
 
 // Verify card exists
-$chk = $dbc->prepare("SELECT name FROM cards WHERE id = ?");
+$chk = $dbc->prepare("SELECT name, type_line FROM cards WHERE id = ?");
 $chk->bind_param("s", $card_id);
 $chk->execute();
 $card = $chk->get_result()->fetch_assoc();
@@ -46,13 +46,15 @@ if (!$card) {
     exit();
 }
 
+$zone = str_contains($card['type_line'] ?? '', 'Token') ? 'tokens' : 'mainboard';
+
 // Insert or increment — no collection ownership check (search → deck flow)
 $ins = $dbc->prepare(
-    "INSERT INTO deck_cards (deck_id, card_id, quantity)
-     VALUES (?, ?, ?)
+    "INSERT INTO deck_cards (deck_id, card_id, quantity, zone)
+     VALUES (?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE quantity = quantity + ?"
 );
-$ins->bind_param("isii", $deck_id, $card_id, $quantity, $quantity);
+$ins->bind_param("isisi", $deck_id, $card_id, $quantity, $zone, $quantity);
 $ins->execute();
 $ins->close();
 

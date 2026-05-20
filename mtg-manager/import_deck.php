@@ -38,11 +38,12 @@ if ($code) {
     } else {
         $cards = json_decode($export['card_data'], true);
 
-        // Tally main / side totals
+        // Tally main / side totals (support both old is_sideboard and new zone)
+        $get_zone   = fn($c) => $c['zone'] ?? ($c['is_sideboard'] ? 'sideboard' : 'mainboard');
         $main_total = array_sum(array_column(
-            array_filter($cards, fn($c) => !$c['is_sideboard']), 'quantity'));
+            array_filter($cards, fn($c) => $get_zone($c) === 'mainboard'), 'quantity'));
         $side_total = array_sum(array_column(
-            array_filter($cards, fn($c) =>  $c['is_sideboard']), 'quantity'));
+            array_filter($cards, fn($c) => $get_zone($c) !== 'mainboard'), 'quantity'));
     }
 }
 ?>
@@ -146,7 +147,7 @@ if ($code) {
                             <td class="small" style="color:#8899aa;"><?= htmlspecialchars($card['type_line']) ?></td>
                             <td><?= htmlspecialchars($card['mana_cost'] ?? '—') ?></td>
                             <td class="text-end fw-bold"><?= $card['quantity'] ?></td>
-                            <td><?= $card['is_sideboard'] ? '<span class="badge bg-secondary">Side</span>' : 'Main' ?></td>
+                            <td><?php $z = $get_zone($card); echo $z === 'mainboard' ? 'Main' : '<span class="badge bg-secondary">' . ucfirst($z) . '</span>'; ?></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>

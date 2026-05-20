@@ -47,11 +47,11 @@ if ($cnt === 0) {
 
 // Snapshot card data
 $card_s = $dbc->prepare(
-    "SELECT dc.card_id, dc.quantity, dc.is_sideboard, c.name, c.mana_cost, c.type_line, c.rarity
+    "SELECT dc.card_id, dc.quantity, dc.zone, c.name, c.mana_cost, c.type_line, c.rarity
      FROM deck_cards dc
      JOIN cards c ON dc.card_id = c.id
      WHERE dc.deck_id = ?
-     ORDER BY dc.is_sideboard, c.name"
+     ORDER BY dc.zone, c.name"
 );
 $card_s->bind_param("i", $deck_id);
 $card_s->execute();

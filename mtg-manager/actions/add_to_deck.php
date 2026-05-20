@@ -41,9 +41,16 @@ if ($owned < $quantity) {
     exit();
 }
 
-// Insert or update deck_cards (main deck, not sideboard)
-$stmt = $dbc->prepare("INSERT INTO deck_cards (deck_id, card_id, quantity) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE quantity = quantity + ?");
-$stmt->bind_param("isii", $deck_id, $card_id, $quantity, $quantity);
+// Determine zone based on card type
+$type_q = $dbc->prepare("SELECT type_line FROM cards WHERE id = ?");
+$type_q->bind_param("s", $card_id);
+$type_q->execute();
+$type_row = $type_q->get_result()->fetch_assoc();
+$type_q->close();
+$zone = str_contains($type_row['type_line'] ?? '', 'Token') ? 'tokens' : 'mainboard';
+
+$stmt = $dbc->prepare("INSERT INTO deck_cards (deck_id, card_id, quantity, zone) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE quantity = quantity + ?");
+$stmt->bind_param("isisi", $deck_id, $card_id, $quantity, $zone, $quantity);
 $stmt->execute();
 $stmt->close();
 

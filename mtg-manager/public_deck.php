@@ -28,9 +28,10 @@ if ($code) {
     } else {
         $cards = json_decode($export['card_data'], true) ?? [];
 
-        // Sort: main first (grouped by type-ish), sideboard last
-        $main_cards = array_filter($cards, fn($c) => !$c['is_sideboard']);
-        $side_cards = array_filter($cards, fn($c) =>  $c['is_sideboard']);
+        // Sort: main first, sideboard last (support both old is_sideboard and new zone)
+        $get_zone   = fn($c) => $c['zone'] ?? ($c['is_sideboard'] ? 'sideboard' : 'mainboard');
+        $main_cards = array_filter($cards, fn($c) => $get_zone($c) === 'mainboard');
+        $side_cards = array_filter($cards, fn($c) => $get_zone($c) !== 'mainboard');
 
         $main_total = array_sum(array_column($main_cards, 'quantity'));
         $side_total = array_sum(array_column($side_cards, 'quantity'));
