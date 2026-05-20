@@ -229,6 +229,79 @@ foreach ($missing_cards as $mc) {
         $missing_value += (float)$mc['price_usd'] * (int)$mc['missing_qty'];
     }
 }
+
+// Fork diff — only for decks forked from a template
+$fork_template   = null;
+$diff_added      = [];
+$diff_removed    = [];
+$diff_modified   = [];
+
+$fd_s = $dbc->prepare(
+    "SELECT t.id, t.name AS template_name, t.share_code, t.card_data
+     FROM user_decks ud
+     JOIN deck_templates t ON t.id = ud.template_id
+     WHERE ud.deck_id = ?"
+);
+$fd_s->bind_param("i", $deck_id);
+$fd_s->execute();
+$fork_template = $fd_s->get_result()->fetch_assoc();
+$fd_s->close();
+
+if ($fork_template) {
+    $tpl_cards = json_decode($fork_template['card_data'], true) ?? [];
+    $tpl_map   = [];
+    foreach ($tpl_cards as $c) {
+        $tpl_map[$c['card_id']] = [
+            'name'     => $c['name'],
+            'quantity' => (int)$c['quantity'],
+            'zone'     => $c['zone'] ?? (!empty($c['is_sideboard']) ? 'sideboard' : 'mainboard'),
+        ];
+    }
+
+    $live_s = $dbc->prepare(
+        "SELECT dc.card_id, dc.quantity, dc.zone, c.name
+         FROM deck_cards dc
+         JOIN cards c ON c.id = dc.card_id
+         WHERE dc.deck_id = ?
+         ORDER BY c.name"
+    );
+    $live_s->bind_param("i", $deck_id);
+    $live_s->execute();
+    $live_cards = $live_s->get_result()->fetch_all(MYSQLI_ASSOC);
+    $live_s->close();
+
+    $live_map = [];
+    foreach ($live_cards as $c) {
+        $live_map[$c['card_id']] = [
+            'name'     => $c['name'],
+            'quantity' => (int)$c['quantity'],
+            'zone'     => $c['zone'],
+        ];
+    }
+
+    foreach ($live_map as $card_id => $live) {
+        if (!isset($tpl_map[$card_id])) {
+            $diff_added[] = $live;
+        } elseif ($live['quantity'] !== $tpl_map[$card_id]['quantity'] || $live['zone'] !== $tpl_map[$card_id]['zone']) {
+            $diff_modified[] = [
+                'name'      => $live['name'],
+                'old_qty'   => $tpl_map[$card_id]['quantity'],
+                'new_qty'   => $live['quantity'],
+                'old_zone'  => $tpl_map[$card_id]['zone'],
+                'new_zone'  => $live['zone'],
+            ];
+        }
+    }
+    foreach ($tpl_map as $card_id => $tpl) {
+        if (!isset($live_map[$card_id])) {
+            $diff_removed[] = $tpl;
+        }
+    }
+
+    usort($diff_added,    fn($a,$b) => strcmp($a['name'], $b['name']));
+    usort($diff_removed,  fn($a,$b) => strcmp($a['name'], $b['name']));
+    usort($diff_modified, fn($a,$b) => strcmp($a['name'], $b['name']));
+}
 ?>
 
 <div class="container-fluid my-4">
@@ -838,6 +911,116 @@ foreach ($missing_cards as $mc) {
                 </div>
             </div>
         </div>
+
+        <?php if ($fork_template): ?>
+        <!-- Fork Diff -->
+        <?php
+        $diff_count   = count($diff_added) + count($diff_removed) + count($diff_modified);
+        $diff_color   = $diff_count === 0 ? '#4ade80' : '#c9a227';
+        $diff_icon    = $diff_count === 0 ? 'bi-check-circle' : 'bi-arrow-left-right';
+        ?>
+        <div class="col-12 mb-4">
+            <div class="card shadow-sm" style="border-top:4px solid <?= $diff_color ?>;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0" style="color:<?= $diff_color ?>;">
+                            <i class="bi <?= $diff_icon ?> me-2"></i>Changes from Template
+                            <?php if ($diff_count > 0): ?>
+                                <span class="badge ms-2"
+                                      style="background:rgba(201,162,39,0.15);color:#c9a227;border:1px solid rgba(201,162,39,0.35);font-weight:400;">
+                                    <?= $diff_count ?> change<?= $diff_count !== 1 ? 's' : '' ?>
+                                </span>
+                            <?php endif; ?>
+                        </h5>
+                        <a href="templates.php" class="small text-decoration-none" style="color:#8899aa;">
+                            <code style="font-size:0.78rem;"><?= htmlspecialchars($fork_template['share_code']) ?></code>
+                            &nbsp;<?= htmlspecialchars($fork_template['template_name']) ?> →
+                        </a>
+                    </div>
+
+                    <?php if ($diff_count === 0): ?>
+                        <p class="mt-2 mb-0 small" style="color:#8899aa;">
+                            This deck is identical to the template.
+                        </p>
+                    <?php else: ?>
+                        <div class="mt-3" id="fork-diff-body">
+                        <?php if (!empty($diff_added)): ?>
+                            <p class="small fw-bold mb-1" style="color:#4ade80;">
+                                <i class="bi bi-plus-circle me-1"></i>Added (<?= count($diff_added) ?>)
+                            </p>
+                            <table class="table table-sm mb-3" style="color:#e8e8e8;">
+                            <?php foreach ($diff_added as $c): ?>
+                                <tr>
+                                    <td style="color:#4ade80;"><?= htmlspecialchars($c['name']) ?></td>
+                                    <td class="text-end" style="color:#8899aa;">×<?= $c['quantity'] ?></td>
+                                    <td class="text-end">
+                                        <span class="badge" style="background:rgba(74,222,128,0.1);color:#4ade80;border:1px solid rgba(74,222,128,0.25);">
+                                            <?= htmlspecialchars($c['zone']) ?>
+                                        </span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </table>
+                        <?php endif; ?>
+
+                        <?php if (!empty($diff_removed)): ?>
+                            <p class="small fw-bold mb-1" style="color:#f87171;">
+                                <i class="bi bi-dash-circle me-1"></i>Removed (<?= count($diff_removed) ?>)
+                            </p>
+                            <table class="table table-sm mb-3" style="color:#e8e8e8;">
+                            <?php foreach ($diff_removed as $c): ?>
+                                <tr>
+                                    <td style="color:#f87171;"><?= htmlspecialchars($c['name']) ?></td>
+                                    <td class="text-end" style="color:#8899aa;">×<?= $c['quantity'] ?></td>
+                                    <td class="text-end">
+                                        <span class="badge" style="background:rgba(248,113,113,0.1);color:#f87171;border:1px solid rgba(248,113,113,0.25);">
+                                            <?= htmlspecialchars($c['zone']) ?>
+                                        </span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </table>
+                        <?php endif; ?>
+
+                        <?php if (!empty($diff_modified)): ?>
+                            <p class="small fw-bold mb-1" style="color:#c9a227;">
+                                <i class="bi bi-pencil me-1"></i>Modified (<?= count($diff_modified) ?>)
+                            </p>
+                            <table class="table table-sm mb-0" style="color:#e8e8e8;">
+                            <?php foreach ($diff_modified as $c): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($c['name']) ?></td>
+                                    <td class="text-end" style="color:#8899aa;">
+                                        <?php if ($c['old_qty'] !== $c['new_qty']): ?>
+                                            <span style="color:#f87171;">×<?= $c['old_qty'] ?></span>
+                                            <i class="bi bi-arrow-right mx-1" style="font-size:0.7rem;"></i>
+                                            <span style="color:#4ade80;">×<?= $c['new_qty'] ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="text-end">
+                                        <?php if ($c['old_zone'] !== $c['new_zone']): ?>
+                                            <span class="badge me-1" style="background:rgba(248,113,113,0.1);color:#f87171;border:1px solid rgba(248,113,113,0.25);text-decoration:line-through;">
+                                                <?= htmlspecialchars($c['old_zone']) ?>
+                                            </span>
+                                            <span class="badge" style="background:rgba(74,222,128,0.1);color:#4ade80;border:1px solid rgba(74,222,128,0.25);">
+                                                <?= htmlspecialchars($c['new_zone']) ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="badge" style="background:rgba(201,162,39,0.1);color:#c9a227;border:1px solid rgba(201,162,39,0.25);">
+                                                <?= htmlspecialchars($c['new_zone']) ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </table>
+                        <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
 
     </div>
     <?php endif; ?>
