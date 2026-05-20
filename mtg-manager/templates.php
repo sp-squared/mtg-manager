@@ -14,9 +14,10 @@ $types  = '';
 
 if ($search !== '') {
     $where[]  = '(t.name LIKE ? OR p.username LIKE ?)';
-    $like     = '%' . $dbc->real_escape_string($search) . '%';
-    $params[] = $like;
-    $params[] = $like;
+    $like1    = '%' . $search . '%';
+    $like2    = '%' . $search . '%';
+    $params[] = $like1;
+    $params[] = $like2;
     $types   .= 'ss';
 }
 if ($filter_format !== '') {
@@ -29,6 +30,7 @@ $where_sql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
 $sql = "SELECT t.id, t.share_code, t.name, t.description, t.format,
                t.total_cards, t.fork_count, t.created_at,
+               t.creator_user_id,
                p.username AS creator_name,
                ud.deck_id AS user_fork_deck_id
         FROM deck_templates t
@@ -122,22 +124,30 @@ $stmt->close();
                             &nbsp;·&nbsp;<?= date('M j, Y', strtotime($tpl['created_at'])) ?>
                         </p>
                     </div>
-                    <div class="card-footer bg-transparent">
+                    <div class="card-footer bg-transparent d-flex gap-2">
                         <?php if ($tpl['user_fork_deck_id']): ?>
                             <a href="deck_editor.php?deck_id=<?= $tpl['user_fork_deck_id'] ?>"
-                               class="btn btn-sm btn-outline-success w-100">
+                               class="btn btn-sm btn-outline-success flex-grow-1">
                                 <i class="bi bi-check-circle me-1"></i>Already forked — Edit my copy
                             </a>
                         <?php elseif (isLoggedIn()): ?>
-                            <button class="btn btn-sm btn-warning w-100 fork-btn"
+                            <button class="btn btn-sm btn-warning flex-grow-1 fork-btn"
                                     data-template-id="<?= $tpl['id'] ?>"
                                     data-template-name="<?= htmlspecialchars($tpl['name']) ?>">
                                 <i class="bi bi-diagram-2 me-1"></i>Fork to My Decks
                             </button>
                         <?php else: ?>
-                            <a href="index.php" class="btn btn-sm btn-outline-secondary w-100">
+                            <a href="index.php" class="btn btn-sm btn-outline-secondary flex-grow-1">
                                 Log in to fork
                             </a>
+                        <?php endif; ?>
+                        <?php if ($user_id && (int)$tpl['creator_user_id'] === $user_id): ?>
+                            <button class="btn btn-sm btn-outline-danger delete-template-btn"
+                                    data-template-id="<?= $tpl['id'] ?>"
+                                    data-template-name="<?= htmlspecialchars($tpl['name']) ?>"
+                                    title="Delete this template">
+                                <i class="bi bi-trash3"></i>
+                            </button>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -175,6 +185,35 @@ document.querySelectorAll('.fork-btn').forEach(btn => {
             alert('Network error — please try again.');
             this.disabled = false;
             this.innerHTML = '<i class="bi bi-diagram-2 me-1"></i>Fork to My Decks';
+        }
+    });
+});
+</script>
+
+<script>
+document.querySelectorAll('.delete-template-btn').forEach(btn => {
+    btn.addEventListener('click', async function () {
+        const templateName = this.dataset.templateName;
+        if (!confirm(`Delete template "${templateName}"?\n\nExisting forks become independent personal decks and are not affected.`)) return;
+
+        const templateId = this.dataset.templateId;
+        this.disabled = true;
+
+        const fd = new FormData();
+        fd.append('template_id', templateId);
+
+        try {
+            const res  = await fetch('ajax/delete_template.php', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.success) {
+                this.closest('.col').remove();
+            } else {
+                alert(data.error || 'Delete failed');
+                this.disabled = false;
+            }
+        } catch (_) {
+            alert('Network error — please try again.');
+            this.disabled = false;
         }
     });
 });

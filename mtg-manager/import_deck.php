@@ -11,11 +11,18 @@ if (!isLoggedIn()) {
 include __DIR__ . '/includes/connect.php';
 $user_id = getUserId();
 
-// If a code was submitted, look it up for preview
+// MTG export code lookup
 $code    = strtoupper(trim($_GET['code'] ?? ''));
 $export  = null;
 $cards   = [];
 $error   = '';
+
+// TPL template code lookup
+$tpl_code     = strtoupper(trim($_GET['tpl_code'] ?? ''));
+$template     = null;
+$tpl_error    = '';
+$tpl_main     = 0;
+$tpl_side     = 0;
 
 if ($code) {
     $s = $dbc->prepare(
@@ -44,6 +51,32 @@ if ($code) {
             array_filter($cards, fn($c) => $get_zone($c) === 'mainboard'), 'quantity'));
         $side_total = array_sum(array_column(
             array_filter($cards, fn($c) => $get_zone($c) !== 'mainboard'), 'quantity'));
+    }
+}
+
+if ($tpl_code) {
+    $ts = $dbc->prepare(
+        "SELECT t.id, t.share_code, t.name, t.description, t.format,
+                t.card_data, t.total_cards, t.fork_count, t.created_at,
+                p.username AS creator,
+                (SELECT deck_id FROM user_decks WHERE user_id = ? AND template_id = t.id LIMIT 1) AS fork_deck_id
+         FROM deck_templates t
+         JOIN player p ON p.id = t.creator_user_id
+         WHERE t.share_code = ?"
+    );
+    $ts->bind_param("is", $user_id, $tpl_code);
+    $ts->execute();
+    $template = $ts->get_result()->fetch_assoc();
+    $ts->close();
+
+    if (!$template) {
+        $tpl_error = 'No template found with that code. Check the code and try again.';
+    } else {
+        $tpl_cards = json_decode($template['card_data'], true) ?? [];
+        $tpl_main  = array_sum(array_column(
+            array_filter($tpl_cards, fn($c) => ($c['zone'] ?? 'mainboard') === 'mainboard'), 'quantity'));
+        $tpl_side  = array_sum(array_column(
+            array_filter($tpl_cards, fn($c) => ($c['zone'] ?? 'mainboard') === 'sideboard'), 'quantity'));
     }
 }
 ?>
@@ -167,6 +200,94 @@ if ($code) {
     </div>
     <?php endif; ?>
 
+    <!-- ── Template Code (TPL-) ────────────────────────────────────────── -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <label class="form-label" style="color:#e8e8e8;">Fork by Template Code</label>
+            <small class="d-block mb-2" style="color:#8899aa;">
+                Template codes look like <code style="color:#6ea8fe;">TPL-ABCD1234</code> — shared from the deck editor.
+            </small>
+            <form method="get" action="import_deck.php" class="d-flex gap-2">
+                <input type="hidden" name="code" value="<?= htmlspecialchars($code) ?>">
+                <input type="text" name="tpl_code" id="tpl-code-input" class="form-control"
+                       placeholder="TPL-XXXXXXXX"
+                       value="<?= htmlspecialchars($tpl_code) ?>"
+                       maxlength="12"
+                       style="text-transform:uppercase;letter-spacing:0.08em;font-family:monospace;max-width:220px;"
+                       autocomplete="off">
+                <button type="submit" class="btn btn-info">
+                    <i class="bi bi-search me-1"></i>Preview
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <?php if ($tpl_error): ?>
+        <div class="alert alert-danger"><?= htmlspecialchars($tpl_error) ?></div>
+    <?php endif; ?>
+
+    <?php if ($template): ?>
+    <div class="card shadow-sm mb-4" style="border-top:3px solid #6ea8fe;">
+        <div class="card-body">
+            <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+                <h5 class="mb-0" style="color:#e8e8e8;"><?= htmlspecialchars($template['name']) ?></h5>
+                <?php if ($template['format']): ?>
+                    <span class="badge flex-shrink-0"
+                          style="background:rgba(110,168,254,0.15);color:#6ea8fe;border:1px solid rgba(110,168,254,0.3);">
+                        <?= htmlspecialchars($template['format']) ?>
+                    </span>
+                <?php endif; ?>
+            </div>
+            <?php if ($template['description']): ?>
+                <p class="mb-3" style="color:#8899aa;"><?= htmlspecialchars($template['description']) ?></p>
+            <?php endif; ?>
+
+            <div class="row g-2 mb-3 text-center">
+                <div class="col-4">
+                    <div class="p-2 rounded" style="background:rgba(255,255,255,0.05);">
+                        <div class="fw-bold" style="color:#e8e8e8;"><?= $tpl_main ?></div>
+                        <div class="small" style="color:#8899aa;">Main Deck</div>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="p-2 rounded" style="background:rgba(255,255,255,0.05);">
+                        <div class="fw-bold" style="color:#e8e8e8;"><?= $tpl_side ?></div>
+                        <div class="small" style="color:#8899aa;">Sideboard</div>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="p-2 rounded" style="background:rgba(255,255,255,0.05);">
+                        <div class="fw-bold" style="color:#e8e8e8;"><?= $template['fork_count'] ?></div>
+                        <div class="small" style="color:#8899aa;">Forks</div>
+                    </div>
+                </div>
+            </div>
+
+            <p class="small mb-0" style="color:#8899aa;">
+                <i class="bi bi-person me-1"></i>By <strong style="color:#e8e8e8;"><?= htmlspecialchars($template['creator']) ?></strong>
+                &nbsp;·&nbsp;
+                <i class="bi bi-clock me-1"></i><?= date('M j, Y', strtotime($template['created_at'])) ?>
+                &nbsp;·&nbsp;
+                <code style="font-size:0.78rem;"><?= htmlspecialchars($template['share_code']) ?></code>
+            </p>
+        </div>
+        <div class="card-footer bg-transparent d-flex justify-content-end gap-2">
+            <a href="import_deck.php" class="btn btn-secondary">Cancel</a>
+            <?php if ($template['fork_deck_id']): ?>
+                <a href="deck_editor.php?deck_id=<?= $template['fork_deck_id'] ?>"
+                   class="btn btn-outline-success">
+                    <i class="bi bi-check-circle me-1"></i>Already forked — Edit my copy
+                </a>
+            <?php else: ?>
+                <button class="btn btn-info" id="fork-template-btn"
+                        data-template-id="<?= $template['id'] ?>">
+                    <i class="bi bi-diagram-2 me-1"></i>Fork to My Decks
+                </button>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
 </div>
 
 <script>
@@ -245,6 +366,65 @@ if ($code) {
             this.value = code.slice(0, 3) + '-' + code.slice(3, 11);
         } else {
             this.value = code;
+        }
+    });
+})();
+</script>
+
+<script>
+// TPL code input formatter — enforces TPL-XXXXXXXX shape
+(function () {
+    const el = document.getElementById('tpl-code-input');
+    if (!el) return;
+
+    function format(raw) {
+        const stripped = raw.replace(/[^A-Z0-9]/g, '');
+        if (stripped.length <= 3) return stripped;
+        return stripped.slice(0, 3) + '-' + stripped.slice(3, 11);
+    }
+
+    el.addEventListener('input', function () {
+        const pos = this.selectionStart;
+        this.value = format(this.value.toUpperCase());
+    });
+
+    el.addEventListener('paste', function (e) {
+        e.preventDefault();
+        const pasted = (e.clipboardData || window.clipboardData)
+            .getData('text').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        this.value = format(pasted);
+    });
+})();
+
+// Fork template button
+(function () {
+    const btn = document.getElementById('fork-template-btn');
+    if (!btn) return;
+
+    btn.addEventListener('click', async function () {
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Forking…';
+
+        const fd = new FormData();
+        fd.append('template_id', this.dataset.templateId);
+
+        try {
+            const res  = await fetch('ajax/fork_template.php', { method: 'POST', body: fd });
+            const data = await res.json();
+
+            if (data.already_forked) {
+                window.location.href = 'deck_editor.php?deck_id=' + data.deck_id;
+            } else if (data.success) {
+                window.location.href = 'deck_editor.php?deck_id=' + data.deck_id + '&msg=forked';
+            } else {
+                alert(data.error || 'Fork failed');
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-diagram-2 me-1"></i>Fork to My Decks';
+            }
+        } catch (_) {
+            alert('Network error — please try again.');
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-diagram-2 me-1"></i>Fork to My Decks';
         }
     });
 })();
