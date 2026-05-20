@@ -32,6 +32,7 @@ if (isset($_GET['msg'])) {
         case 'removed': $message = 'Card removed from deck.'; break;
         case 'updated': $message = 'Quantity updated.'; break;
         case 'cleared': $message = 'All cards removed. Deck is ready to rebuild.'; $msg_type = 'warning'; break;
+        case 'forked':  $message = 'Deck forked from template. Customize it as your own.'; break;
     }
 }
 
@@ -244,6 +245,9 @@ foreach ($missing_cards as $mc) {
                         data-deck-id="<?= $deck_id ?>"
                         data-deck-name="<?= htmlspecialchars($deck['name']) ?>">
                     <i class="bi bi-box-arrow-up me-1"></i>Export
+                </button>
+                <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#publishTemplateModal">
+                    <i class="bi bi-journal-plus me-1"></i>Publish Template
                 </button>
             </div>
             <p class="text-center" id="deck-desc-display" style="color:#8899aa;">
@@ -874,6 +878,61 @@ foreach ($missing_cards as $mc) {
     </div>
 </div>
 
+<!-- Publish Template Modal -->
+<div class="modal fade" id="publishTemplateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" style="color:#6ea8fe;">
+                    <i class="bi bi-journal-plus me-2"></i>Publish as Template
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div id="publish-step-config" class="modal-body">
+                <p style="color:#8899aa;" class="small mb-3">
+                    Publishing creates a canonical snapshot of this deck that any user can fork.
+                    The template is permanent and tied to your account.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label" style="color:#e8e8e8;">Format <span style="color:#8899aa;">(optional)</span></label>
+                    <select class="form-select" id="publish-format">
+                        <option value="">— None —</option>
+                        <?php foreach (['Standard','Pioneer','Modern','Legacy','Vintage','Commander','Pauper','Historic','Explorer','Alchemy'] as $f): ?>
+                            <option value="<?= $f ?>"><?= $f ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div id="publish-step-config-footer" class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-info" id="confirm-publish-btn">
+                    <i class="bi bi-journal-plus me-1"></i>Publish
+                </button>
+            </div>
+
+            <div id="publish-step-result" class="modal-body text-center py-4" style="display:none;">
+                <i class="bi bi-check-circle-fill" style="font-size:2rem;color:#75b798;"></i>
+                <p class="mt-2 mb-1" style="color:#e8e8e8;">Template published!</p>
+                <p class="small mb-2" style="color:#8899aa;">Share this code so others can find and fork it:</p>
+                <div class="d-flex align-items-center justify-content-center gap-2 my-3">
+                    <code id="publish-code-display"
+                          style="font-size:1.4rem;font-weight:700;color:#6ea8fe;letter-spacing:0.1em;
+                                 background:rgba(110,168,254,0.1);padding:0.35rem 0.9rem;border-radius:8px;
+                                 border:1px solid rgba(110,168,254,0.3);"></code>
+                    <button class="btn btn-sm btn-outline-secondary" id="publish-copy-code-btn">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+                <a href="templates.php" class="btn btn-sm btn-outline-info">Browse Templates</a>
+            </div>
+            <div id="publish-step-result-footer" class="modal-footer" style="display:none;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 document.getElementById('save-deck-btn').addEventListener('click', function() {
     const form = document.getElementById('edit-deck-form');
@@ -1052,6 +1111,53 @@ document.querySelectorAll('.add-missing-to-wishlist').forEach(btn => {
         } catch (_) {
             showToast('Network error', 'danger');
         }
+    });
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Publish Template ─────────────────────────────────────────────────────────
+document.getElementById('publishTemplateModal').addEventListener('show.bs.modal', function () {
+    document.getElementById('publish-step-config').style.display        = '';
+    document.getElementById('publish-step-config-footer').style.display = '';
+    document.getElementById('publish-step-result').style.display        = 'none';
+    document.getElementById('publish-step-result-footer').style.display = 'none';
+});
+
+document.getElementById('confirm-publish-btn').addEventListener('click', async function () {
+    const format = document.getElementById('publish-format').value;
+    const btn    = this;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Publishing…';
+
+    const fd = new FormData();
+    fd.append('deck_id', DECK_ID);
+    fd.append('format',  format);
+
+    try {
+        const res  = await fetch('ajax/publish_template.php', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!data.success) {
+            alert(data.error || 'Publish failed');
+        } else {
+            document.getElementById('publish-code-display').textContent = data.share_code;
+            document.getElementById('publish-step-config').style.display        = 'none';
+            document.getElementById('publish-step-config-footer').style.display = 'none';
+            document.getElementById('publish-step-result').style.display        = '';
+            document.getElementById('publish-step-result-footer').style.display = '';
+        }
+    } catch (_) {
+        alert('Network error — please try again.');
+    } finally {
+        btn.disabled  = false;
+        btn.innerHTML = '<i class="bi bi-journal-plus me-1"></i>Publish';
+    }
+});
+
+document.getElementById('publish-copy-code-btn').addEventListener('click', function () {
+    const code = document.getElementById('publish-code-display').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+        this.innerHTML = '<i class="bi bi-clipboard-check"></i>';
+        setTimeout(() => { this.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 2000);
     });
 });
 // ─────────────────────────────────────────────────────────────────────────────

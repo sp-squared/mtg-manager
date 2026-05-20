@@ -25,9 +25,14 @@ if (isset($_GET['msg'])) {
 <div class="container my-4">
     <div class="d-flex align-items-center justify-content-between mb-4">
         <h1 class="mb-0">My Decks</h1>
-        <a href="import_deck.php" class="btn btn-outline-primary">
-            <i class="bi bi-box-arrow-in-down me-1"></i>Import Deck
-        </a>
+        <div class="d-flex gap-2">
+            <a href="templates.php" class="btn btn-outline-info">
+                <i class="bi bi-journal-bookmark-fill me-1"></i>Browse Templates
+            </a>
+            <a href="import_deck.php" class="btn btn-outline-primary">
+                <i class="bi bi-box-arrow-in-down me-1"></i>Import Deck
+            </a>
+        </div>
     </div>
 
     <?php if ($message): ?>
@@ -57,9 +62,22 @@ if (isset($_GET['msg'])) {
     </div>
 
     <?php
-    // Fetch decks including is_favorite
-    $stmt = $dbc->prepare("SELECT d.id, d.name, d.description, d.created_at, d.updated_at, d.is_favorite, COUNT(IF(c.type_line NOT LIKE '%Token%', dc.card_id, NULL)) as unique_count, COALESCE(SUM(IF(c.type_line NOT LIKE '%Token%', dc.quantity, 0)), 0) as total_count FROM decks d LEFT JOIN deck_cards dc ON dc.deck_id = d.id LEFT JOIN cards c ON c.id = dc.card_id WHERE d.user_id = ? GROUP BY d.id ORDER BY d.created_at DESC");
-    $stmt->bind_param("i", $user_id);
+    $stmt = $dbc->prepare(
+        "SELECT d.id, d.name, d.description, d.created_at, d.updated_at, d.is_favorite,
+                COUNT(IF(dc.zone != 'tokens', dc.card_id, NULL))            AS unique_count,
+                COALESCE(SUM(IF(dc.zone != 'tokens', dc.quantity, 0)), 0)  AS total_count,
+                dt.name       AS template_name,
+                dt.id         AS template_id,
+                dt.share_code AS template_code
+         FROM decks d
+         LEFT JOIN deck_cards dc    ON dc.deck_id    = d.id
+         LEFT JOIN user_decks ud    ON ud.deck_id    = d.id AND ud.user_id = ?
+         LEFT JOIN deck_templates dt ON dt.id = ud.template_id
+         WHERE d.user_id = ?
+         GROUP BY d.id, dt.name, dt.id, dt.share_code
+         ORDER BY d.created_at DESC"
+    );
+    $stmt->bind_param("ii", $user_id, $user_id);
     $stmt->execute();
     $decks = $stmt->get_result();
 
@@ -86,6 +104,15 @@ if (isset($_GET['msg'])) {
                                    data-deck-id="<?= $deck['id'] ?>" 
                                    style="cursor: pointer; font-size: 1.2rem;"></i>
                             </div>
+                            <?php if ($deck['template_id']): ?>
+                                <div class="mt-1 mb-1">
+                                    <a href="templates.php" class="badge text-decoration-none"
+                                       style="background:rgba(110,168,254,0.15);color:#6ea8fe;border:1px solid rgba(110,168,254,0.3);font-weight:400;"
+                                       title="Forked from template <?= htmlspecialchars($deck['template_code']) ?>">
+                                        <i class="bi bi-diagram-2 me-1"></i>From: <?= htmlspecialchars($deck['template_name']) ?>
+                                    </a>
+                                </div>
+                            <?php endif; ?>
                             <p class="card-text mt-2"><?= htmlspecialchars($deck['description'] ?: 'No description') ?></p>
                             <p class="card-text">
                                 <small class="text-muted">

@@ -145,7 +145,40 @@ CREATE TABLE IF NOT EXISTS deck_cards (
 );
 
 -- -----------------------------------------------------------------------------
--- 8. DECK EXPORTS (shareable snapshots with expiry)
+-- 8. DECK TEMPLATES (canonical shared snapshots, forkable by any user)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS deck_templates (
+    id              INT          AUTO_INCREMENT PRIMARY KEY,
+    share_code      VARCHAR(12)  NOT NULL UNIQUE,    -- TPL-XXXXXXXX
+    creator_user_id INT          NOT NULL,
+    name            VARCHAR(100) NOT NULL,
+    description     TEXT,
+    format          VARCHAR(50)  NULL,               -- Standard / Modern / Commander etc.
+    card_data       JSON         NOT NULL,           -- snapshot at publish time
+    total_cards     INT          NOT NULL DEFAULT 0, -- non-token card count
+    fork_count      INT          NOT NULL DEFAULT 0,
+    created_at      DATETIME     NOT NULL DEFAULT NOW(),
+    INDEX idx_fork_count (fork_count),
+    INDEX idx_creator    (creator_user_id),
+    FOREIGN KEY (creator_user_id) REFERENCES player(id) ON DELETE CASCADE
+);
+
+-- Links a user's personal fork (decks row) back to the template it came from.
+CREATE TABLE IF NOT EXISTS user_decks (
+    id          INT      AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT      NOT NULL,
+    template_id INT      NOT NULL,
+    deck_id     INT      NOT NULL,
+    forked_at   DATETIME NOT NULL DEFAULT NOW(),
+    UNIQUE KEY uq_user_template (user_id, template_id),
+    INDEX idx_deck (deck_id),
+    FOREIGN KEY (user_id)     REFERENCES player(id)         ON DELETE CASCADE,
+    FOREIGN KEY (template_id) REFERENCES deck_templates(id) ON DELETE CASCADE,
+    FOREIGN KEY (deck_id)     REFERENCES decks(id)          ON DELETE CASCADE
+);
+
+-- -----------------------------------------------------------------------------
+-- 9. DECK EXPORTS (shareable snapshots with expiry)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS deck_exports (
     id           INT          AUTO_INCREMENT PRIMARY KEY,
@@ -161,7 +194,7 @@ CREATE TABLE IF NOT EXISTS deck_exports (
 );
 
 -- -----------------------------------------------------------------------------
--- 9. CARD OF THE DAY
+-- 10. CARD OF THE DAY
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS daily_cards (
     id           INT         AUTO_INCREMENT PRIMARY KEY,
