@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS player (
 -- 4. CARDS
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS cards (
-    id               VARCHAR(50)      PRIMARY KEY,   -- Scryfall UUID
+    id               VARCHAR(50)      PRIMARY KEY,   -- Scryfall printing UUID
+    oracle_id        VARCHAR(36)      NULL,          -- Scryfall oracle UUID (shared across printings)
     name             VARCHAR(255)     NOT NULL,
     set_id           VARCHAR(20),
     collector_number VARCHAR(20),
@@ -74,6 +75,7 @@ CREATE TABLE IF NOT EXISTS cards (
     flavor_text      TEXT,
     keywords         JSON,
     imported_at      TIMESTAMP    NULL DEFAULT NULL,  -- set on first import, never updated
+    INDEX idx_oracle_id (oracle_id),
     FOREIGN KEY (set_id) REFERENCES sets(id)
 );
 
@@ -557,6 +559,24 @@ END$$
 DELIMITER ;
 CALL _migrate_tokens_zone();
 DROP PROCEDURE IF EXISTS _migrate_tokens_zone;
+
+-- cards: add oracle_id for grouping printings of the same card
+-- After running this, re-run admin/import_scryfall.php to backfill values.
+DROP PROCEDURE IF EXISTS _add_oracle_id;
+DELIMITER $$
+CREATE PROCEDURE _add_oracle_id()
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cards' AND COLUMN_NAME = 'oracle_id'
+  ) THEN
+    ALTER TABLE cards ADD COLUMN oracle_id VARCHAR(36) NULL AFTER id;
+    ALTER TABLE cards ADD INDEX idx_oracle_id (oracle_id);
+  END IF;
+END$$
+DELIMITER ;
+CALL _add_oracle_id();
+DROP PROCEDURE IF EXISTS _add_oracle_id;
 
 -- =============================================================================
 -- END OF SCHEMA

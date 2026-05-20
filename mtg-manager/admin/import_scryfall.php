@@ -309,15 +309,15 @@ $color_stmt = $dbc->prepare(
 );
 $card_stmt = $dbc->prepare(
     "INSERT INTO cards
-        (id, name, set_id, collector_number, rarity, mana_cost, cmc,
+        (id, oracle_id, name, set_id, collector_number, rarity, mana_cost, cmc,
          type_line, oracle_text, power, toughness, loyalty, image_uri,
          flavor_text, keywords, imported_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
      ON DUPLICATE KEY UPDATE
-        name=VALUES(name), rarity=VALUES(rarity), mana_cost=VALUES(mana_cost),
-        cmc=VALUES(cmc), type_line=VALUES(type_line), oracle_text=VALUES(oracle_text),
-        power=VALUES(power), toughness=VALUES(toughness), loyalty=VALUES(loyalty),
-        image_uri=VALUES(image_uri), flavor_text=VALUES(flavor_text),
+        oracle_id=VALUES(oracle_id), name=VALUES(name), rarity=VALUES(rarity),
+        mana_cost=VALUES(mana_cost), cmc=VALUES(cmc), type_line=VALUES(type_line),
+        oracle_text=VALUES(oracle_text), power=VALUES(power), toughness=VALUES(toughness),
+        loyalty=VALUES(loyalty), image_uri=VALUES(image_uri), flavor_text=VALUES(flavor_text),
         keywords=VALUES(keywords),
         imported_at = IFNULL(imported_at, NOW())"
 );
@@ -355,6 +355,13 @@ while ($card = $parser->getNext()) {
 
     if (in_array($card['layout'] ?? '', $skip_layouts)) { $skipped++; continue; }
 
+    // Skip ability markers and keyword-counter cards (type_line has no standard card type)
+    $raw_type = $card['type_line'] ?? '';
+    if ($raw_type && !preg_match('/Creature|Artifact|Enchantment|Instant|Sorcery|Planeswalker|Land|Battle|Dungeon|Token/i', $raw_type)) {
+        $skipped++;
+        continue;
+    }
+
     // ── Set ───────────────────────────────────────────────────────────────────
     $set_id   = $card['set']        ?? '';
     $set_name = $card['set_name']   ?? '';
@@ -367,6 +374,7 @@ while ($card = $parser->getNext()) {
 
     // ── Card ──────────────────────────────────────────────────────────────────
     $card_id    = $card['id'];
+    $oracle_id  = $card['oracle_id']        ?? null;
     $name       = $card['name'];
     $coll_num   = $card['collector_number'] ?? '';
     $rarity     = $card['rarity']           ?? '';
@@ -385,8 +393,8 @@ while ($card = $parser->getNext()) {
                ?? ($card['card_faces'][0]['image_uris']['normal'] ?? null);
 
     $card_stmt->bind_param(
-        "ssssssdssssssss",
-        $card_id, $name, $set_id, $coll_num, $rarity,
+        "sssssssdssssssss",
+        $card_id, $oracle_id, $name, $set_id, $coll_num, $rarity,
         $mana_cost, $cmc, $type_line, $oracle,
         $power, $toughness, $loyalty, $image,
         $flavor, $keywords

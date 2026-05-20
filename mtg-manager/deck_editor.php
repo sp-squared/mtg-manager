@@ -44,12 +44,12 @@ function truncate($string, $length = 16, $append = '…') {
 // Total card count
 $total_stmt = $dbc->prepare(
     "SELECT SUM(dc.quantity) as total,
-            SUM(IF(dc.zone='mainboard', dc.quantity, 0)) as main_count,
-            SUM(IF(dc.zone='sideboard', dc.quantity, 0)) as side_count,
-            SUM(IF(dc.zone='tokens',   dc.quantity, 0)) as token_qty,
-            SUM(IF(dc.zone='mainboard', 1, 0)) as unique_main,
-            SUM(IF(dc.zone='sideboard', 1, 0)) as unique_side,
-            SUM(IF(dc.zone='tokens',   1, 0)) as unique_tokens
+            SUM(IF(dc.zone='mainboard' AND c.type_line NOT LIKE '%Token%', dc.quantity, 0)) as main_count,
+            SUM(IF(dc.zone='sideboard' AND c.type_line NOT LIKE '%Token%', dc.quantity, 0)) as side_count,
+            SUM(IF(dc.zone='tokens'    OR  c.type_line LIKE '%Token%',     dc.quantity, 0)) as token_qty,
+            SUM(IF(dc.zone='mainboard' AND c.type_line NOT LIKE '%Token%', 1, 0)) as unique_main,
+            SUM(IF(dc.zone='sideboard' AND c.type_line NOT LIKE '%Token%', 1, 0)) as unique_side,
+            SUM(IF(dc.zone='tokens'    OR  c.type_line LIKE '%Token%',     1, 0)) as unique_tokens
      FROM deck_cards dc
      JOIN cards c ON c.id = dc.card_id
      WHERE dc.deck_id = ?");
@@ -141,7 +141,7 @@ $type_stmt = $dbc->prepare(
         SUM(IF(c.type_line LIKE '%Land%',        1, 0)) as u_lands
      FROM deck_cards dc
      JOIN cards c ON dc.card_id = c.id
-     WHERE dc.deck_id = ? AND dc.zone = 'mainboard'");
+     WHERE dc.deck_id = ? AND dc.zone = 'mainboard' AND c.type_line NOT LIKE '%Token%'");
 $type_stmt->bind_param("i", $deck_id);
 $type_stmt->execute();
 $types = $type_stmt->get_result()->fetch_assoc();
@@ -155,7 +155,8 @@ $singleton_stmt = $dbc->prepare(
      WHERE dc.deck_id = ?
        AND dc.zone = 'mainboard'
        AND dc.quantity > 1
-       AND c.type_line NOT LIKE '%Basic Land%'"
+       AND c.type_line NOT LIKE '%Basic Land%'
+       AND c.type_line NOT LIKE '%Token%'"
 );
 $singleton_stmt->bind_param("i", $deck_id);
 $singleton_stmt->execute();
@@ -173,6 +174,7 @@ $curve_stmt = $dbc->prepare(
      JOIN cards c ON dc.card_id = c.id
      WHERE dc.deck_id = ? AND dc.zone = 'mainboard'
        AND c.type_line NOT LIKE '%Land%'
+       AND c.type_line NOT LIKE '%Token%'
      GROUP BY cmc_bucket
      ORDER BY cmc_bucket"
 );
@@ -194,7 +196,7 @@ $token_stmt = $dbc->prepare(
     "SELECT c.id, c.name, c.type_line, c.power, c.toughness, c.image_uri, dc.quantity
      FROM deck_cards dc
      JOIN cards c ON dc.card_id = c.id
-     WHERE dc.deck_id = ? AND dc.zone = 'tokens'
+     WHERE dc.deck_id = ? AND (dc.zone = 'tokens' OR c.type_line LIKE '%Token%') AND dc.zone != 'maybeboard'
      ORDER BY c.name");
 $token_stmt->bind_param("i", $deck_id);
 $token_stmt->execute();
@@ -215,6 +217,7 @@ $missing_stmt = $dbc->prepare(
      LEFT JOIN card_prices cp ON cp.card_id = dc.card_id
      WHERE dc.deck_id = ?
        AND dc.zone != 'tokens'
+       AND c.type_line NOT LIKE '%Token%'
        AND (uc.quantity IS NULL OR uc.quantity < dc.quantity)
      ORDER BY c.name"
 );
@@ -237,7 +240,7 @@ $diff_removed    = [];
 $diff_modified   = [];
 
 $fd_s = $dbc->prepare(
-    "SELECT t.id, t.name AS template_name, t.share_code, t.card_data
+    "SELECT t.id, t.name AS template_name, t.share_code, t.card_data, t.format AS template_format
      FROM user_decks ud
      JOIN deck_templates t ON t.id = ud.template_id
      WHERE ud.deck_id = ?"
@@ -301,6 +304,14 @@ if ($fork_template) {
     usort($diff_added,    fn($a,$b) => strcmp($a['name'], $b['name']));
     usort($diff_removed,  fn($a,$b) => strcmp($a['name'], $b['name']));
     usort($diff_modified, fn($a,$b) => strcmp($a['name'], $b['name']));
+}
+
+// Default format for legality checker: template format → size heuristic → standard
+$default_legality_format = 'standard';
+if ($fork_template && !empty($fork_template['template_format'])) {
+    $default_legality_format = strtolower($fork_template['template_format']);
+} elseif ($main_count >= 95 && $main_count <= 105) {
+    $default_legality_format = 'commander';
 }
 ?>
 
@@ -591,38 +602,39 @@ if ($fork_template) {
                             <td class="text-end" style="color:#8899aa;"><?= $unique_total ?></td>
                         </tr>
                     </table>
-                    <?php if ($main_count < 60): ?>
-                        <div class="mt-2 small" style="color:#fd7e14;">
-                            <i class="bi bi-exclamation-circle me-1"></i>
-                            <?= 60 - $main_count ?> more card<?= (60 - $main_count) !== 1 ? 's' : '' ?> needed for a standard 60-card deck
+                    <div class="mt-3 pt-2" style="border-top:1px solid rgba(201,162,39,0.15);">
+                        <select id="legality-format-select" class="form-select form-select-sm mb-2"
+                                style="background:#1a1a2e;color:#e8e8e8;border-color:rgba(167,139,250,0.4);">
+                            <?php
+                            $legality_formats = [
+                                'standard'        => 'Standard',
+                                'pioneer'         => 'Pioneer',
+                                'modern'          => 'Modern',
+                                'legacy'          => 'Legacy',
+                                'vintage'         => 'Vintage',
+                                'pauper'          => 'Pauper',
+                                'commander'       => 'Commander',
+                                'brawl'           => 'Brawl',
+                                'historic'        => 'Historic',
+                                'explorer'        => 'Explorer',
+                                'alchemy'         => 'Alchemy',
+                                'paupercommander' => 'Pauper Commander',
+                                'gladiator'       => 'Gladiator',
+                                'premodern'       => 'Premodern',
+                                'oldschool'       => 'Old School',
+                            ];
+                            foreach ($legality_formats as $slug => $label):
+                                $sel = $slug === $default_legality_format ? 'selected' : '';
+                            ?>
+                                <option value="<?= $slug ?>" <?= $sel ?>><?= $label ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div id="legality-result" style="min-height:24px;font-size:0.82rem;">
+                            <span style="color:#8899aa;">
+                                <span class="spinner-border spinner-border-sm me-1"></span>Checking…
+                            </span>
                         </div>
-                    <?php elseif ($main_count === 60): ?>
-                        <div class="mt-2 small" style="color:#75b798;">
-                            <i class="bi bi-check-circle me-1"></i>Perfect 60-card main deck!
-                        </div>
-                    <?php else: ?>
-                        <div class="mt-2 small" style="color:#8899aa;">
-                            <i class="bi bi-info-circle me-1"></i><?= $main_count - 60 ?> cards over standard 60
-                        </div>
-                    <?php endif; ?>
-
-                    <!-- Commander (100-card singleton) -->
-                    <?php if ($is_commander_legal): ?>
-                        <div class="mt-2 small" style="color:#a78bfa;">
-                            <i class="bi bi-trophy-fill me-1"></i>Valid Commander deck — 100-card singleton!
-                        </div>
-                    <?php elseif ($main_count === 100 && !$is_commander_singleton): ?>
-                        <div class="mt-2 small" style="color:#fd7e14;">
-                            <i class="bi bi-exclamation-triangle me-1"></i>
-                            100 cards but <strong><?= $singleton_violations ?></strong>
-                            non-basic card<?= $singleton_violations !== 1 ? 's have' : ' has' ?> duplicate copies.
-                            Commander requires singleton (1 of each non-basic).
-                        </div>
-                    <?php elseif ($main_count < 100 && $is_commander_singleton && $main_count > 60): ?>
-                        <div class="mt-2 small" style="color:#8899aa;">
-                            <i class="bi bi-info-circle me-1"></i>Singleton so far — <?= 100 - $main_count ?> more card<?= (100 - $main_count) !== 1 ? 's' : '' ?> needed for Commander.
-                        </div>
-                    <?php endif; ?>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1296,6 +1308,106 @@ document.querySelectorAll('.add-missing-to-wishlist').forEach(btn => {
         }
     });
 });
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Legality Checker ─────────────────────────────────────────────────────────
+(function () {
+    const sel = document.getElementById('legality-format-select');
+    const box = document.getElementById('legality-result');
+    if (!sel || !box) return;
+
+    const FORMAT_LABELS = {
+        standard:'Standard', pioneer:'Pioneer', modern:'Modern',
+        legacy:'Legacy', vintage:'Vintage', pauper:'Pauper',
+        commander:'Commander', brawl:'Brawl', historic:'Historic',
+        explorer:'Explorer', alchemy:'Alchemy', paupercommander:'Pauper Commander',
+        gladiator:'Gladiator', premodern:'Premodern', oldschool:'Old School',
+    };
+
+    const VIOLATION_COLORS = {
+        banned: '#f87171', restricted: '#fbbf24', not_legal: '#8899aa',
+        too_many_copies: '#f87171', deck_size: '#f87171',
+        sideboard_size: '#f87171', commander_zone: '#f87171',
+        no_legality_data: '#fbbf24',
+    };
+
+    function violationText(v) {
+        switch (v.type) {
+            case 'deck_size':
+            case 'sideboard_size':
+            case 'commander_zone':
+            case 'no_legality_data':
+                return v.message;
+            case 'too_many_copies':
+                return `<strong>${v.card}</strong> — ${v.count} copies (max ${v.max})`;
+            case 'banned':
+                return `<strong>${v.card}</strong> is banned`;
+            case 'restricted':
+                return `<strong>${v.card}</strong> is restricted (${v.count} copies, max 1)`;
+            case 'not_legal':
+                return `<strong>${v.card}</strong> not in card pool`;
+            default:
+                return v.message || v.type;
+        }
+    }
+
+    async function checkLegality(format) {
+        box.innerHTML = '<span style="color:#8899aa;font-size:0.85rem;"><span class="spinner-border spinner-border-sm me-1"></span>Checking…</span>';
+
+        const fd = new FormData();
+        fd.append('deck_id', DECK_ID);
+        fd.append('format',  format);
+
+        try {
+            const res  = await fetch('ajax/check_legality.php', { method: 'POST', body: fd });
+            const data = await res.json();
+
+            if (!data.success) {
+                box.innerHTML = `<span style="color:#f87171;font-size:0.85rem;">${data.error}</span>`;
+                return;
+            }
+
+            const label = FORMAT_LABELS[data.format] ?? data.format;
+
+            if (data.legal) {
+                box.innerHTML = `
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-check-circle-fill" style="color:#4ade80;font-size:1.1rem;"></i>
+                        <span style="color:#4ade80;">Legal in <strong>${label}</strong></span>
+                        <span class="small ms-2" style="color:#8899aa;">
+                            ${data.counts.main} main${data.counts.side > 0 ? ' · ' + data.counts.side + ' side' : ''}${data.counts.commander > 0 ? ' · ' + data.counts.commander + ' cmdr' : ''}
+                        </span>
+                    </div>`;
+                return;
+            }
+
+            // Group violations by type for display order
+            const order  = ['deck_size','sideboard_size','commander_zone','too_many_copies','banned','restricted','not_legal','no_legality_data'];
+            const sorted = [...data.violations].sort((a,b) => order.indexOf(a.type) - order.indexOf(b.type));
+
+            const items = sorted.map(v =>
+                `<li style="color:${VIOLATION_COLORS[v.type] ?? '#e8e8e8'};">${violationText(v)}</li>`
+            ).join('');
+
+            box.innerHTML = `
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-x-circle-fill" style="color:#f87171;font-size:1.1rem;"></i>
+                    <span style="color:#f87171;">Not legal in <strong>${label}</strong>
+                        <span class="ms-1 badge" style="background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.3);">
+                            ${data.violations.length} issue${data.violations.length !== 1 ? 's' : ''}
+                        </span>
+                    </span>
+                </div>
+                <ul class="mb-0 ps-3 small">${items}</ul>`;
+
+        } catch (_) {
+            box.innerHTML = '<span style="color:#f87171;font-size:0.85rem;">Network error</span>';
+        }
+    }
+
+    sel.addEventListener('change', () => checkLegality(sel.value));
+    checkLegality(sel.value); // auto-check on load
+})();
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Publish Template ─────────────────────────────────────────────────────────
