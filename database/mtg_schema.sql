@@ -3,15 +3,15 @@
 -- Run this once against a fresh database.
 -- Includes all tables, columns, and constraints added across all migrations.
 -- =============================================================================
-
 -- -----------------------------------------------------------------------------
 -- 1. DATABASE & USER
 -- -----------------------------------------------------------------------------
-CREATE USER IF NOT EXISTS 'mtg_collection'@'localhost' IDENTIFIED BY 'change_this_password';
-CREATE DATABASE IF NOT EXISTS mtg_database
-    CHARACTER SET utf8mb4
-    COLLATE utf8mb4_unicode_ci;
-GRANT ALL PRIVILEGES ON mtg_database.* TO 'mtg_collection'@'localhost';
+CREATE USER IF NOT EXISTS 'mtg_collection' @'localhost' IDENTIFIED BY 'change_this_password';
+
+CREATE DATABASE IF NOT EXISTS mtg_database CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+GRANT ALL PRIVILEGES ON mtg_database.* TO 'mtg_collection' @'localhost';
+
 FLUSH PRIVILEGES;
 
 USE mtg_database;
@@ -20,340 +20,392 @@ USE mtg_database;
 -- 2. REFERENCE TABLES (no foreign-key dependencies)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS sets (
-    id          VARCHAR(20)  PRIMARY KEY,
-    name        VARCHAR(255) NOT NULL,
-    released_at DATE,
-    set_type    VARCHAR(50)
+  id VARCHAR(20) PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  released_at DATE,
+  set_type VARCHAR(50)
 );
 
 CREATE TABLE IF NOT EXISTS colors (
-    id   CHAR(1)     PRIMARY KEY,   -- W, U, B, R, G
-    name VARCHAR(20)
+  id CHAR(1) PRIMARY KEY,
+  -- W, U, B, R, G
+  name VARCHAR(20)
 );
 
-INSERT IGNORE INTO colors (id, name) VALUES
-    ('W', 'White'),
-    ('U', 'Blue'),
-    ('B', 'Black'),
-    ('R', 'Red'),
-    ('G', 'Green');
+INSERT
+  IGNORE INTO colors (id, name)
+VALUES
+  ('W', 'White'),
+  ('U', 'Blue'),
+  ('B', 'Black'),
+  ('R', 'Red'),
+  ('G', 'Green');
 
 CREATE TABLE IF NOT EXISTS formats (
-    id   INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(50) UNIQUE NOT NULL
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(50) UNIQUE NOT NULL
 );
 
 -- -----------------------------------------------------------------------------
 -- 3. PLAYER
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS player (
-    id       INT          AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50)  UNIQUE NOT NULL,
-    password      VARCHAR(255) NOT NULL,             -- bcrypt hash
-    email         VARCHAR(255) NOT NULL UNIQUE,       -- enforced NOT NULL (1NF)
-    session_token VARCHAR(64)  NULL DEFAULT NULL        -- single-session enforcement
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(50) UNIQUE NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  -- bcrypt hash
+  email VARCHAR(255) NOT NULL UNIQUE,
+  -- enforced NOT NULL (1NF)
+  session_token VARCHAR(64) NULL DEFAULT NULL -- single-session enforcement
 );
 
 -- -----------------------------------------------------------------------------
 -- 4. CARDS
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS cards (
-    id               VARCHAR(50)      PRIMARY KEY,   -- Scryfall printing UUID
-    oracle_id        VARCHAR(36)      NULL,          -- Scryfall oracle UUID (shared across printings)
-    name             VARCHAR(255)     NOT NULL,
-    set_id           VARCHAR(20),
-    collector_number VARCHAR(20),
-    rarity           VARCHAR(20),
-    mana_cost        VARCHAR(50),
-    cmc              DECIMAL(10,1)    DEFAULT 0,      -- uncapped for high-cmc cards
-    type_line        TEXT,
-    oracle_text      TEXT,
-    power            VARCHAR(10),
-    toughness        VARCHAR(10),
-    loyalty          VARCHAR(10),
-    image_uri        VARCHAR(500),
-    flavor_text      TEXT,
-    keywords         JSON,
-    imported_at      TIMESTAMP    NULL DEFAULT NULL,  -- set on first import, never updated
-    INDEX idx_oracle_id (oracle_id),
-    FOREIGN KEY (set_id) REFERENCES sets(id)
+  id VARCHAR(50) PRIMARY KEY,
+  -- Scryfall printing UUID
+  oracle_id VARCHAR(36) NULL,
+  -- Scryfall oracle UUID (shared across printings)
+  name VARCHAR(255) NOT NULL,
+  set_id VARCHAR(20),
+  collector_number VARCHAR(20),
+  rarity VARCHAR(20),
+  mana_cost VARCHAR(50),
+  cmc DECIMAL(10, 1) DEFAULT 0,
+  -- uncapped for high-cmc cards
+  type_line TEXT,
+  oracle_text TEXT,
+  power VARCHAR(10),
+  toughness VARCHAR(10),
+  loyalty VARCHAR(10),
+  image_uri VARCHAR(500),
+  flavor_text TEXT,
+  keywords JSON,
+  imported_at TIMESTAMP NULL DEFAULT NULL,
+  -- set on first import, never updated
+  INDEX idx_oracle_id (oracle_id),
+  FOREIGN KEY (set_id) REFERENCES sets(id)
 );
 
 -- -----------------------------------------------------------------------------
 -- 5. JUNCTION TABLES FOR CARDS
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS card_colors (
-    card_id  VARCHAR(50) NOT NULL,
-    color_id CHAR(1)     NOT NULL,
-    PRIMARY KEY (card_id, color_id),
-    FOREIGN KEY (card_id)  REFERENCES cards(id)  ON DELETE CASCADE,
-    FOREIGN KEY (color_id) REFERENCES colors(id) ON DELETE CASCADE
+  card_id VARCHAR(50) NOT NULL,
+  color_id CHAR(1) NOT NULL,
+  PRIMARY KEY (card_id, color_id),
+  FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE,
+  FOREIGN KEY (color_id) REFERENCES colors(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS format_legalities (
-    card_id   VARCHAR(50) NOT NULL,
-    format_id INT         NOT NULL,
-    legality  VARCHAR(20),                -- 'legal', 'banned', 'restricted'
-    PRIMARY KEY (card_id, format_id),
-    FOREIGN KEY (card_id)   REFERENCES cards(id)   ON DELETE CASCADE,
-    FOREIGN KEY (format_id) REFERENCES formats(id) ON DELETE CASCADE
+  card_id VARCHAR(50) NOT NULL,
+  format_id INT NOT NULL,
+  legality VARCHAR(20),
+  -- 'legal', 'banned', 'restricted'
+  PRIMARY KEY (card_id, format_id),
+  FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE,
+  FOREIGN KEY (format_id) REFERENCES formats(id) ON DELETE CASCADE
 );
 
 -- -----------------------------------------------------------------------------
 -- 6. USER DATA TABLES
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS user_collection (
-    user_id      INT         NOT NULL,
-    card_id      VARCHAR(50) NOT NULL,
-    quantity     INT         DEFAULT 1,
-    foil_quantity INT        DEFAULT 0,
-    added_at     TIMESTAMP   NULL DEFAULT NULL,  -- when card was first added to collection
-    PRIMARY KEY (user_id, card_id),
-    FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE,
-    FOREIGN KEY (card_id) REFERENCES cards(id)  ON DELETE CASCADE
+  user_id INT NOT NULL,
+  card_id VARCHAR(50) NOT NULL,
+  quantity INT DEFAULT 1,
+  foil_quantity INT DEFAULT 0,
+  added_at TIMESTAMP NULL DEFAULT NULL,
+  -- when card was first added to collection
+  PRIMARY KEY (user_id, card_id),
+  FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE,
+  FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS wishlist (
-    user_id  INT         NOT NULL,
-    card_id  VARCHAR(50) NOT NULL,
-    priority TINYINT     DEFAULT 1,     -- 1 = low, 5 = high
-    PRIMARY KEY (user_id, card_id),
-    FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE,
-    FOREIGN KEY (card_id) REFERENCES cards(id)  ON DELETE CASCADE
+  user_id INT NOT NULL,
+  card_id VARCHAR(50) NOT NULL,
+  priority TINYINT DEFAULT 1,
+  -- 1 = low, 5 = high
+  PRIMARY KEY (user_id, card_id),
+  FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE,
+  FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
 );
 
 -- -----------------------------------------------------------------------------
 -- 7. DECKS
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS decks (
-    id          INT          AUTO_INCREMENT PRIMARY KEY,
-    user_id     INT          NOT NULL,
-    name        VARCHAR(100) NOT NULL,
-    description TEXT,
-    is_favorite TINYINT      NOT NULL DEFAULT 0,
-    created_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  is_favorite TINYINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS deck_cards (
-    deck_id  INT         NOT NULL,
-    card_id  VARCHAR(50) NOT NULL,
-    quantity INT         DEFAULT 1,
-    zone     ENUM('mainboard','sideboard','commander','companion','maybeboard','tokens') NOT NULL DEFAULT 'mainboard',
-    PRIMARY KEY (deck_id, card_id, zone),
-    FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE,
-    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
+  deck_id INT NOT NULL,
+  card_id VARCHAR(50) NOT NULL,
+  quantity INT DEFAULT 1,
+  zone ENUM(
+    'mainboard',
+    'sideboard',
+    'commander',
+    'companion',
+    'maybeboard',
+    'tokens'
+  ) NOT NULL DEFAULT 'mainboard',
+  PRIMARY KEY (deck_id, card_id, zone),
+  FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE,
+  FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
 );
 
 -- -----------------------------------------------------------------------------
 -- 8. DECK TEMPLATES (canonical shared snapshots, forkable by any user)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS deck_templates (
-    id              INT          AUTO_INCREMENT PRIMARY KEY,
-    share_code      VARCHAR(12)  NOT NULL UNIQUE,    -- TPL-XXXXXXXX
-    creator_user_id INT          NOT NULL,
-    name            VARCHAR(100) NOT NULL,
-    description     TEXT,
-    format          VARCHAR(50)  NULL,               -- Standard / Modern / Commander etc.
-    card_data       JSON         NOT NULL,           -- snapshot at publish time
-    total_cards     INT          NOT NULL DEFAULT 0, -- non-token card count
-    fork_count      INT          NOT NULL DEFAULT 0,
-    created_at      DATETIME     NOT NULL DEFAULT NOW(),
-    INDEX idx_fork_count (fork_count),
-    INDEX idx_creator    (creator_user_id),
-    FOREIGN KEY (creator_user_id) REFERENCES player(id) ON DELETE CASCADE
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  share_code VARCHAR(12) NOT NULL UNIQUE,
+  -- TPL-XXXXXXXX
+  creator_user_id INT NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  format VARCHAR(50) NULL,
+  -- Standard / Modern / Commander etc.
+  card_data JSON NOT NULL,
+  -- snapshot at publish time
+  total_cards INT NOT NULL DEFAULT 0,
+  -- non-token card count
+  fork_count INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT NOW(),
+  INDEX idx_fork_count (fork_count),
+  INDEX idx_creator (creator_user_id),
+  FOREIGN KEY (creator_user_id) REFERENCES player(id) ON DELETE CASCADE
 );
 
 -- Links a user's personal fork (decks row) back to the template it came from.
 CREATE TABLE IF NOT EXISTS user_decks (
-    id          INT      AUTO_INCREMENT PRIMARY KEY,
-    user_id     INT      NOT NULL,
-    template_id INT      NOT NULL,
-    deck_id     INT      NOT NULL,
-    forked_at   DATETIME NOT NULL DEFAULT NOW(),
-    UNIQUE KEY uq_user_template (user_id, template_id),
-    INDEX idx_deck (deck_id),
-    FOREIGN KEY (user_id)     REFERENCES player(id)         ON DELETE CASCADE,
-    FOREIGN KEY (template_id) REFERENCES deck_templates(id) ON DELETE CASCADE,
-    FOREIGN KEY (deck_id)     REFERENCES decks(id)          ON DELETE CASCADE
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  template_id INT NOT NULL,
+  deck_id INT NOT NULL,
+  forked_at DATETIME NOT NULL DEFAULT NOW(),
+  UNIQUE KEY uq_user_template (user_id, template_id),
+  INDEX idx_deck (deck_id),
+  FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE,
+  FOREIGN KEY (template_id) REFERENCES deck_templates(id) ON DELETE CASCADE,
+  FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
 );
 
 -- -----------------------------------------------------------------------------
 -- 9. DECK EXPORTS (shareable snapshots with expiry)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS deck_exports (
-    id           INT          AUTO_INCREMENT PRIMARY KEY,
-    export_code  VARCHAR(12)  NOT NULL UNIQUE,
-    owner_id     INT          NOT NULL,
-    deck_name    VARCHAR(255) NOT NULL,
-    description  TEXT,
-    card_data    JSON         NOT NULL,     -- immutable snapshot at export time
-    created_at   DATETIME     DEFAULT NOW(),
-    expires_at   DATETIME     NULL,         -- NULL = never expires
-    import_count INT          DEFAULT 0,
-    FOREIGN KEY (owner_id) REFERENCES player(id) ON DELETE CASCADE
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  export_code VARCHAR(12) NOT NULL UNIQUE,
+  owner_id INT NOT NULL,
+  deck_name VARCHAR(255) NOT NULL,
+  description TEXT,
+  card_data JSON NOT NULL,
+  -- immutable snapshot at export time
+  created_at DATETIME DEFAULT NOW(),
+  expires_at DATETIME NULL,
+  -- NULL = never expires
+  import_count INT DEFAULT 0,
+  FOREIGN KEY (owner_id) REFERENCES player(id) ON DELETE CASCADE
 );
 
 -- -----------------------------------------------------------------------------
 -- 10. CARD OF THE DAY
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS daily_cards (
-    id           INT         AUTO_INCREMENT PRIMARY KEY,
-    card_id      VARCHAR(36) NOT NULL,
-    display_date DATE        NOT NULL UNIQUE,
-    INDEX idx_date (display_date)
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  card_id VARCHAR(36) NOT NULL,
+  display_date DATE NOT NULL UNIQUE,
+  INDEX idx_date (display_date)
 );
 
 -- Stored procedure: fills every missing date between earliest record and today.
 -- Called by the dashboard on every page load via PHP; also safe to call manually.
 -- Uses a recursive CTE (requires MySQL 8.0+) so no PHP date logic is needed.
 DROP PROCEDURE IF EXISTS fill_daily_card_gaps;
-DELIMITER $$
-CREATE PROCEDURE fill_daily_card_gaps()
-BEGIN
-    -- Only run if the table has at least one row (CTE needs a start date)
-    IF (SELECT COUNT(*) FROM daily_cards) > 0 THEN
-        -- Insert one unique random card for every date that has no entry,
-        -- from the earliest existing record up to today's MySQL date.
-        INSERT IGNORE INTO daily_cards (card_id, display_date)
+
+DELIMITER $ $ CREATE PROCEDURE fill_daily_card_gaps() BEGIN -- Only run if the table has at least one row (CTE needs a start date)
+IF (
+  SELECT
+    COUNT(*)
+  FROM
+    daily_cards
+) > 0 THEN -- Insert one unique random card for every date that has no entry,
+-- from the earliest existing record up to today's MySQL date.
+INSERT
+  IGNORE INTO daily_cards (card_id, display_date)
+SELECT
+  (
+    SELECT
+      c.id
+    FROM
+      cards c
+    WHERE
+      c.type_line NOT LIKE '%Token%'
+      AND c.type_line NOT LIKE '%Basic Land%'
+      AND c.image_uri IS NOT NULL
+      AND c.id NOT IN (
         SELECT
-            (SELECT c.id
-             FROM cards c
-             WHERE c.type_line NOT LIKE '%Token%'
-               AND c.type_line NOT LIKE '%Basic Land%'
-               AND c.image_uri IS NOT NULL
-               AND c.id NOT IN (SELECT card_id FROM daily_cards)
-             ORDER BY RAND()
-             LIMIT 1) AS card_id,
-            gap_date.d AS display_date
-        FROM (
-            WITH RECURSIVE date_series AS (
-                SELECT MIN(display_date) AS d FROM daily_cards
-                UNION ALL
-                SELECT DATE_ADD(d, INTERVAL 1 DAY)
-                FROM date_series
-                WHERE d < CURDATE()
-            )
-            SELECT d
-            FROM date_series
-            LEFT JOIN daily_cards ON daily_cards.display_date = d
-            WHERE daily_cards.display_date IS NULL
-        ) AS gap_date
-        WHERE gap_date.d IS NOT NULL;
-    END IF;
-END$$
-DELIMITER ;
+          card_id
+        FROM
+          daily_cards
+      )
+    ORDER BY
+      RAND()
+    LIMIT
+      1
+  ) AS card_id,
+  gap_date.d AS display_date
+FROM
+  (
+    WITH RECURSIVE date_series AS (
+      SELECT
+        MIN(display_date) AS d
+      FROM
+        daily_cards
+      UNION
+      ALL
+      SELECT
+        DATE_ADD(d, INTERVAL 1 DAY)
+      FROM
+        date_series
+      WHERE
+        d < CURDATE()
+    )
+    SELECT
+      d
+    FROM
+      date_series
+      LEFT JOIN daily_cards ON daily_cards.display_date = d
+    WHERE
+      daily_cards.display_date IS NULL
+  ) AS gap_date
+WHERE
+  gap_date.d IS NOT NULL;
+
+END IF;
+
+END $ $ DELIMITER;
 
 -- Scheduled event: runs the gap-fill procedure once per day at midnight.
 -- Requires event_scheduler = ON in MySQL (SET GLOBAL event_scheduler = ON).
 -- This means gaps are filled even on days nobody logs in.
 DROP EVENT IF EXISTS daily_card_gap_fill;
-CREATE EVENT daily_card_gap_fill
-    ON SCHEDULE EVERY 1 DAY
-    STARTS (CURDATE() + INTERVAL 1 DAY)   -- first run: tomorrow midnight
-    DO CALL fill_daily_card_gaps();
+
+CREATE EVENT daily_card_gap_fill ON SCHEDULE EVERY 1 DAY STARTS (CURDATE() + INTERVAL 1 DAY) -- first run: tomorrow midnight
+DO CALL fill_daily_card_gaps();
 
 -- -----------------------------------------------------------------------------
 -- 10. PRICE TRACKING
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS card_prices (
-    card_id        VARCHAR(50)   NOT NULL PRIMARY KEY,
-    price_usd      DECIMAL(10,2) NULL,
-    price_usd_foil DECIMAL(10,2) NULL,
-    price_eur      DECIMAL(10,2) NULL,
-    price_eur_foil DECIMAL(10,2) NULL,
-    price_tix      DECIMAL(10,2) NULL,
-    updated_at     TIMESTAMP     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
+  card_id VARCHAR(50) NOT NULL PRIMARY KEY,
+  price_usd DECIMAL(10, 2) NULL,
+  price_usd_foil DECIMAL(10, 2) NULL,
+  price_eur DECIMAL(10, 2) NULL,
+  price_eur_foil DECIMAL(10, 2) NULL,
+  price_tix DECIMAL(10, 2) NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS card_price_history (
-    id             BIGINT        AUTO_INCREMENT PRIMARY KEY,
-    card_id        VARCHAR(50)   NOT NULL,
-    price_usd      DECIMAL(10,2) NULL,
-    price_usd_foil DECIMAL(10,2) NULL,
-    price_eur      DECIMAL(10,2) NULL,
-    price_eur_foil DECIMAL(10,2) NULL,
-    price_tix      DECIMAL(10,2) NULL,
-    recorded_date  DATE          NOT NULL,
-    UNIQUE KEY uq_card_date (card_id, recorded_date),
-    INDEX idx_card (card_id),
-    INDEX idx_date (recorded_date),
-    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  card_id VARCHAR(50) NOT NULL,
+  price_usd DECIMAL(10, 2) NULL,
+  price_usd_foil DECIMAL(10, 2) NULL,
+  price_eur DECIMAL(10, 2) NULL,
+  price_eur_foil DECIMAL(10, 2) NULL,
+  price_tix DECIMAL(10, 2) NULL,
+  recorded_date DATE NOT NULL,
+  UNIQUE KEY uq_card_date (card_id, recorded_date),
+  INDEX idx_card (card_id),
+  INDEX idx_date (recorded_date),
+  FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
 );
 
 -- Populate prices by running admin/update_prices.php after importing cards.
-
 -- -----------------------------------------------------------------------------
 -- 11. LOGIN RATE LIMITING
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS login_attempts (
-    id           INT AUTO_INCREMENT PRIMARY KEY,
-    username     VARCHAR(50)  NOT NULL,
-    attempted_at DATETIME     NOT NULL DEFAULT NOW(),
-    event_type   VARCHAR(20)  NOT NULL DEFAULT 'failed',  -- 'failed' | 'bypassed'
-    INDEX idx_username_time (username, attempted_at)
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(50) NOT NULL,
+  attempted_at DATETIME NOT NULL DEFAULT NOW(),
+  event_type VARCHAR(20) NOT NULL DEFAULT 'failed',
+  -- 'failed' | 'bypassed'
+  INDEX idx_username_time (username, attempted_at)
 );
 
 -- -----------------------------------------------------------------------------
 -- 12. RECENTLY VIEWED CARDS
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS recently_viewed (
-    id        INT         AUTO_INCREMENT PRIMARY KEY,
-    user_id   INT         NOT NULL,
-    card_id   VARCHAR(36) NOT NULL,
-    viewed_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_user_card (user_id, card_id),
-    INDEX idx_user_viewed (user_id, viewed_at),
-    FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE,
-    FOREIGN KEY (card_id) REFERENCES cards(id)  ON DELETE CASCADE
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  card_id VARCHAR(36) NOT NULL,
+  viewed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_user_card (user_id, card_id),
+  INDEX idx_user_viewed (user_id, viewed_at),
+  FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE,
+  FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
 );
 
 -- -----------------------------------------------------------------------------
 -- 13. PRICE ALERTS
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS price_alerts (
-    id           INT            AUTO_INCREMENT PRIMARY KEY,
-    user_id      INT            NOT NULL,
-    card_id      VARCHAR(36)    NOT NULL,
-    target_price DECIMAL(10,2)  NOT NULL,
-    created_at   DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    triggered_at DATETIME       NULL,
-    is_active    TINYINT(1)     NOT NULL DEFAULT 1,
-    INDEX idx_user_active (user_id, is_active),
-    UNIQUE KEY uq_user_card (user_id, card_id),
-    FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE,
-    FOREIGN KEY (card_id) REFERENCES cards(id)  ON DELETE CASCADE
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  card_id VARCHAR(36) NOT NULL,
+  target_price DECIMAL(10, 2) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  triggered_at DATETIME NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  INDEX idx_user_active (user_id, is_active),
+  UNIQUE KEY uq_user_card (user_id, card_id),
+  FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE,
+  FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
 );
 
 -- -----------------------------------------------------------------------------
 -- 14. COLLECTION VALUE TRACKING
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS collection_value_history (
-    id            INT            AUTO_INCREMENT PRIMARY KEY,
-    user_id       INT            NOT NULL,
-    recorded_date DATE           NOT NULL,
-    total_value   DECIMAL(12,2)  NOT NULL DEFAULT 0,
-    priced_count  INT            NOT NULL DEFAULT 0,
-    total_cards   INT            NOT NULL DEFAULT 0,
-    UNIQUE KEY uq_user_date (user_id, recorded_date),
-    INDEX idx_user_history (user_id, recorded_date),
-    FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  recorded_date DATE NOT NULL,
+  total_value DECIMAL(12, 2) NOT NULL DEFAULT 0,
+  priced_count INT NOT NULL DEFAULT 0,
+  total_cards INT NOT NULL DEFAULT 0,
+  UNIQUE KEY uq_user_date (user_id, recorded_date),
+  INDEX idx_user_history (user_id, recorded_date),
+  FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS collection_value_update_alerts (
-    id             BIGINT         AUTO_INCREMENT PRIMARY KEY,
-    user_id        INT            NOT NULL,
-    source         VARCHAR(40)    NOT NULL,
-    previous_value DECIMAL(12,2)  NOT NULL DEFAULT 0.00,
-    current_value  DECIMAL(12,2)  NOT NULL DEFAULT 0.00,
-    trend          ENUM('up','down','unchanged') NOT NULL,
-    created_at     DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    is_read        TINYINT(1)     NOT NULL DEFAULT 0,
-    INDEX idx_user_unread (user_id, is_read, created_at),
-    INDEX idx_user_latest (user_id, id),
-    FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  source VARCHAR(40) NOT NULL,
+  previous_value DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+  current_value DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+  trend ENUM('up', 'down', 'unchanged') NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  is_read TINYINT(1) NOT NULL DEFAULT 0,
+  INDEX idx_user_unread (user_id, is_read, created_at),
+  INDEX idx_user_latest (user_id, id),
+  FOREIGN KEY (user_id) REFERENCES player(id) ON DELETE CASCADE
 );
 
 -- =============================================================================
@@ -362,7 +414,6 @@ CREATE TABLE IF NOT EXISTS collection_value_update_alerts (
 -- They will error if the column already exists — that is expected and harmless.
 -- On a fresh database these are unnecessary (the CREATE TABLEs above include them).
 -- =============================================================================
-
 -- =============================================================================
 -- UPGRADE MIGRATIONS
 -- Safe to run against an existing database. Each block checks
@@ -370,212 +421,367 @@ CREATE TABLE IF NOT EXISTS collection_value_update_alerts (
 -- ADD COLUMN IF NOT EXISTS requires MySQL 8.0.3+; these procedures work on
 -- MySQL 5.7+ and 8.0 alike.
 -- =============================================================================
-
 -- cards: uncap CMC
-ALTER TABLE cards MODIFY cmc DECIMAL(10,1) DEFAULT 0;
+ALTER TABLE
+  cards
+MODIFY
+  cmc DECIMAL(10, 1) DEFAULT 0;
 
 -- cards: flavor_text
 DROP PROCEDURE IF EXISTS _add_col;
-DELIMITER $$
-CREATE PROCEDURE _add_col()
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cards' AND COLUMN_NAME = 'flavor_text'
-  ) THEN
-    ALTER TABLE cards ADD COLUMN flavor_text TEXT NULL;
-  END IF;
-END$$
-DELIMITER ;
+
+DELIMITER $ $ CREATE PROCEDURE _add_col() BEGIN IF NOT EXISTS (
+  SELECT
+    1
+  FROM
+    information_schema.COLUMNS
+  WHERE
+    TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'cards'
+    AND COLUMN_NAME = 'flavor_text'
+) THEN
+ALTER TABLE
+  cards
+ADD
+  COLUMN flavor_text TEXT NULL;
+
+END IF;
+
+END $ $ DELIMITER;
+
 CALL _add_col();
+
 DROP PROCEDURE IF EXISTS _add_col;
 
 -- cards: keywords
 DROP PROCEDURE IF EXISTS _add_col;
-DELIMITER $$
-CREATE PROCEDURE _add_col()
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cards' AND COLUMN_NAME = 'keywords'
-  ) THEN
-    ALTER TABLE cards ADD COLUMN keywords JSON NULL;
-  END IF;
-END$$
-DELIMITER ;
+
+DELIMITER $ $ CREATE PROCEDURE _add_col() BEGIN IF NOT EXISTS (
+  SELECT
+    1
+  FROM
+    information_schema.COLUMNS
+  WHERE
+    TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'cards'
+    AND COLUMN_NAME = 'keywords'
+) THEN
+ALTER TABLE
+  cards
+ADD
+  COLUMN keywords JSON NULL;
+
+END IF;
+
+END $ $ DELIMITER;
+
 CALL _add_col();
+
 DROP PROCEDURE IF EXISTS _add_col;
 
 -- decks: is_favorite
 DROP PROCEDURE IF EXISTS _add_col;
-DELIMITER $$
-CREATE PROCEDURE _add_col()
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'decks' AND COLUMN_NAME = 'is_favorite'
-  ) THEN
-    ALTER TABLE decks ADD COLUMN is_favorite TINYINT NOT NULL DEFAULT 0;
-  END IF;
-END$$
-DELIMITER ;
+
+DELIMITER $ $ CREATE PROCEDURE _add_col() BEGIN IF NOT EXISTS (
+  SELECT
+    1
+  FROM
+    information_schema.COLUMNS
+  WHERE
+    TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'decks'
+    AND COLUMN_NAME = 'is_favorite'
+) THEN
+ALTER TABLE
+  decks
+ADD
+  COLUMN is_favorite TINYINT NOT NULL DEFAULT 0;
+
+END IF;
+
+END $ $ DELIMITER;
+
 CALL _add_col();
+
 DROP PROCEDURE IF EXISTS _add_col;
 
 -- decks: updated_at
 DROP PROCEDURE IF EXISTS _add_col;
-DELIMITER $$
-CREATE PROCEDURE _add_col()
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'decks' AND COLUMN_NAME = 'updated_at'
-  ) THEN
-    ALTER TABLE decks ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
-    UPDATE decks SET updated_at = created_at WHERE id > 0;
-  END IF;
-END$$
-DELIMITER ;
+
+DELIMITER $ $ CREATE PROCEDURE _add_col() BEGIN IF NOT EXISTS (
+  SELECT
+    1
+  FROM
+    information_schema.COLUMNS
+  WHERE
+    TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'decks'
+    AND COLUMN_NAME = 'updated_at'
+) THEN
+ALTER TABLE
+  decks
+ADD
+  COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
+
+UPDATE
+  decks
+SET
+  updated_at = created_at
+WHERE
+  id > 0;
+
+END IF;
+
+END $ $ DELIMITER;
+
 CALL _add_col();
+
 DROP PROCEDURE IF EXISTS _add_col;
 
 -- login_attempts: event_type column
 DROP PROCEDURE IF EXISTS _add_col;
-DELIMITER $$
-CREATE PROCEDURE _add_col()
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'login_attempts' AND COLUMN_NAME = 'event_type'
-  ) THEN
-    ALTER TABLE login_attempts ADD COLUMN event_type VARCHAR(20) NOT NULL DEFAULT 'failed';
-  END IF;
-END$$
-DELIMITER ;
+
+DELIMITER $ $ CREATE PROCEDURE _add_col() BEGIN IF NOT EXISTS (
+  SELECT
+    1
+  FROM
+    information_schema.COLUMNS
+  WHERE
+    TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'login_attempts'
+    AND COLUMN_NAME = 'event_type'
+) THEN
+ALTER TABLE
+  login_attempts
+ADD
+  COLUMN event_type VARCHAR(20) NOT NULL DEFAULT 'failed';
+
+END IF;
+
+END $ $ DELIMITER;
+
 CALL _add_col();
+
 DROP PROCEDURE IF EXISTS _add_col;
 
 -- user_collection: added_at (tracks when card was first added for Recently Added sort)
 DROP PROCEDURE IF EXISTS _add_col;
-DELIMITER $$
-CREATE PROCEDURE _add_col()
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user_collection' AND COLUMN_NAME = 'added_at'
-  ) THEN
-    ALTER TABLE user_collection ADD COLUMN added_at TIMESTAMP NULL DEFAULT NULL;
-  END IF;
-END$$
-DELIMITER ;
+
+DELIMITER $ $ CREATE PROCEDURE _add_col() BEGIN IF NOT EXISTS (
+  SELECT
+    1
+  FROM
+    information_schema.COLUMNS
+  WHERE
+    TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'user_collection'
+    AND COLUMN_NAME = 'added_at'
+) THEN
+ALTER TABLE
+  user_collection
+ADD
+  COLUMN added_at TIMESTAMP NULL DEFAULT NULL;
+
+END IF;
+
+END $ $ DELIMITER;
+
 CALL _add_col();
+
 DROP PROCEDURE IF EXISTS _add_col;
 
 -- cards: imported_at (tracks first import time for Newest sort)
 DROP PROCEDURE IF EXISTS _add_col;
-DELIMITER $$
-CREATE PROCEDURE _add_col()
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cards' AND COLUMN_NAME = 'imported_at'
-  ) THEN
-    ALTER TABLE cards ADD COLUMN imported_at TIMESTAMP NULL DEFAULT NULL;
-  END IF;
-END$$
-DELIMITER ;
+
+DELIMITER $ $ CREATE PROCEDURE _add_col() BEGIN IF NOT EXISTS (
+  SELECT
+    1
+  FROM
+    information_schema.COLUMNS
+  WHERE
+    TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'cards'
+    AND COLUMN_NAME = 'imported_at'
+) THEN
+ALTER TABLE
+  cards
+ADD
+  COLUMN imported_at TIMESTAMP NULL DEFAULT NULL;
+
+END IF;
+
+END $ $ DELIMITER;
+
 CALL _add_col();
+
 DROP PROCEDURE IF EXISTS _add_col;
 
 -- player: session_token
 DROP PROCEDURE IF EXISTS _add_col;
-DELIMITER $$
-CREATE PROCEDURE _add_col()
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'player' AND COLUMN_NAME = 'session_token'
-  ) THEN
-    ALTER TABLE player ADD COLUMN session_token VARCHAR(64) NULL DEFAULT NULL;
-  END IF;
-END$$
-DELIMITER ;
+
+DELIMITER $ $ CREATE PROCEDURE _add_col() BEGIN IF NOT EXISTS (
+  SELECT
+    1
+  FROM
+    information_schema.COLUMNS
+  WHERE
+    TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'player'
+    AND COLUMN_NAME = 'session_token'
+) THEN
+ALTER TABLE
+  player
+ADD
+  COLUMN session_token VARCHAR(64) NULL DEFAULT NULL;
+
+END IF;
+
+END $ $ DELIMITER;
+
 CALL _add_col();
+
 DROP PROCEDURE IF EXISTS _add_col;
 
 -- deck_cards: replace is_sideboard boolean with zone enum
 -- Backfills sideboard rows, rebuilds the composite PK, then drops is_sideboard.
 DROP PROCEDURE IF EXISTS _migrate_zone;
-DELIMITER $$
-CREATE PROCEDURE _migrate_zone()
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'deck_cards' AND COLUMN_NAME = 'zone'
-  ) THEN
-    ALTER TABLE deck_cards
-      ADD COLUMN zone ENUM('mainboard','sideboard','commander','companion','maybeboard','tokens')
-                      NOT NULL DEFAULT 'mainboard';
-    UPDATE deck_cards SET zone = 'sideboard' WHERE is_sideboard = 1;
-    -- Backfill token cards into the tokens zone
-    UPDATE deck_cards dc
-      JOIN cards c ON c.id = dc.card_id
-      SET dc.zone = 'tokens'
-      WHERE dc.zone = 'mainboard' AND c.type_line LIKE '%Token%';
-    ALTER TABLE deck_cards DROP PRIMARY KEY;
-    ALTER TABLE deck_cards ADD PRIMARY KEY (deck_id, card_id, zone);
-    ALTER TABLE deck_cards DROP COLUMN is_sideboard;
-  END IF;
-END$$
-DELIMITER ;
+
+DELIMITER $ $ CREATE PROCEDURE _migrate_zone() BEGIN IF NOT EXISTS (
+  SELECT
+    1
+  FROM
+    information_schema.COLUMNS
+  WHERE
+    TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'deck_cards'
+    AND COLUMN_NAME = 'zone'
+) THEN
+ALTER TABLE
+  deck_cards
+ADD
+  COLUMN zone ENUM(
+    'mainboard',
+    'sideboard',
+    'commander',
+    'companion',
+    'maybeboard',
+    'tokens'
+  ) NOT NULL DEFAULT 'mainboard';
+
+UPDATE
+  deck_cards
+SET
+  zone = 'sideboard'
+WHERE
+  is_sideboard = 1;
+
+-- Backfill token cards into the tokens zone
+UPDATE
+  deck_cards dc
+  JOIN cards c ON c.id = dc.card_id
+SET
+  dc.zone = 'tokens'
+WHERE
+  dc.zone = 'mainboard'
+  AND c.type_line LIKE '%Token%';
+
+ALTER TABLE
+  deck_cards DROP PRIMARY KEY;
+
+ALTER TABLE
+  deck_cards
+ADD
+  PRIMARY KEY (deck_id, card_id, zone);
+
+ALTER TABLE
+  deck_cards DROP COLUMN is_sideboard;
+
+END IF;
+
+END $ $ DELIMITER;
+
 CALL _migrate_zone();
+
 DROP PROCEDURE IF EXISTS _migrate_zone;
 
 -- deck_cards: widen zone ENUM to include 'tokens' and backfill token cards
 -- Safe to run on databases that already have the zone column.
 DROP PROCEDURE IF EXISTS _migrate_tokens_zone;
-DELIMITER $$
-CREATE PROCEDURE _migrate_tokens_zone()
-BEGIN
-  -- Widen ENUM only if 'tokens' is not already a valid value
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME   = 'deck_cards'
-      AND COLUMN_NAME  = 'zone'
-      AND COLUMN_TYPE LIKE '%tokens%'
-  ) THEN
-    ALTER TABLE deck_cards
-      MODIFY COLUMN zone
-        ENUM('mainboard','sideboard','commander','companion','maybeboard','tokens')
-        NOT NULL DEFAULT 'mainboard';
-  END IF;
-  -- Backfill any existing token cards still sitting in mainboard
-  UPDATE deck_cards dc
-    JOIN cards c ON c.id = dc.card_id
-    SET dc.zone = 'tokens'
-    WHERE dc.zone = 'mainboard' AND c.type_line LIKE '%Token%';
-END$$
-DELIMITER ;
+
+DELIMITER $ $ CREATE PROCEDURE _migrate_tokens_zone() BEGIN -- Widen ENUM only if 'tokens' is not already a valid value
+IF NOT EXISTS (
+  SELECT
+    1
+  FROM
+    information_schema.COLUMNS
+  WHERE
+    TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'deck_cards'
+    AND COLUMN_NAME = 'zone'
+    AND COLUMN_TYPE LIKE '%tokens%'
+) THEN
+ALTER TABLE
+  deck_cards
+MODIFY
+  COLUMN zone ENUM(
+    'mainboard',
+    'sideboard',
+    'commander',
+    'companion',
+    'maybeboard',
+    'tokens'
+  ) NOT NULL DEFAULT 'mainboard';
+
+END IF;
+
+-- Backfill any existing token cards still sitting in mainboard
+UPDATE
+  deck_cards dc
+  JOIN cards c ON c.id = dc.card_id
+SET
+  dc.zone = 'tokens'
+WHERE
+  dc.zone = 'mainboard'
+  AND c.type_line LIKE '%Token%';
+
+END $ $ DELIMITER;
+
 CALL _migrate_tokens_zone();
+
 DROP PROCEDURE IF EXISTS _migrate_tokens_zone;
 
 -- cards: add oracle_id for grouping printings of the same card
 -- After running this, re-run admin/import_scryfall.php to backfill values.
 DROP PROCEDURE IF EXISTS _add_oracle_id;
-DELIMITER $$
-CREATE PROCEDURE _add_oracle_id()
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cards' AND COLUMN_NAME = 'oracle_id'
-  ) THEN
-    ALTER TABLE cards ADD COLUMN oracle_id VARCHAR(36) NULL AFTER id;
-    ALTER TABLE cards ADD INDEX idx_oracle_id (oracle_id);
-  END IF;
-END$$
-DELIMITER ;
+
+DELIMITER $ $ CREATE PROCEDURE _add_oracle_id() BEGIN IF NOT EXISTS (
+  SELECT
+    1
+  FROM
+    information_schema.COLUMNS
+  WHERE
+    TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'cards'
+    AND COLUMN_NAME = 'oracle_id'
+) THEN
+ALTER TABLE
+  cards
+ADD
+  COLUMN oracle_id VARCHAR(36) NULL
+AFTER
+  id;
+
+ALTER TABLE
+  cards
+ADD
+  INDEX idx_oracle_id (oracle_id);
+
+END IF;
+
+END $ $ DELIMITER;
+
 CALL _add_oracle_id();
+
 DROP PROCEDURE IF EXISTS _add_oracle_id;
 
 -- =============================================================================
