@@ -158,86 +158,184 @@ Card data is sourced from the [Scryfall](https://scryfall.com) bulk data API. No
 
 ## Tech Stack
 
-| Layer    | Technology                                 |
-|----------|--------------------------------------------|
-| Backend  | PHP 7.4+ (mbstring not required)           |
-| Database | MySQL 8.0+ (recursive CTE required)        |
-| Frontend | Bootstrap 5, Bootstrap Icons, Chart.js 4.4 |
-| Card Data | Scryfall Bulk Data API                    |
-| Server   | Apache (tested on Windows / Apache 2.4)    |
+| Layer     | Technology                                        |
+|-----------|---------------------------------------------------|
+| Backend   | PHP 8.x (mbstring not required)                   |
+| Database  | MySQL 8.0+ (recursive CTE required)               |
+| Frontend  | Bootstrap 5, Bootstrap Icons, Chart.js 4.4        |
+| Card Data | Scryfall Bulk Data API                            |
+| Server    | Apache 2.4 — Windows binaries via ApacheLounge    |
 
 ---
 
 ## Setup
 
 ### Requirements
-- PHP 7.4+
-- MySQL 8.0+
-- Apache 2.4+
-- A `cacert.pem` bundle for SSL verification on Windows ([download from curl.se](https://curl.se/ca/cacert.pem))
 
-### Installation
+- **Windows** (tested on Windows 11)
+- **Apache 2.4** — Windows binaries are **not distributed on the official Apache website**. Download from [apachelounge.com/download](https://www.apachelounge.com/download/) instead.
+- **PHP 8.x** — installed at `C:\php`
+- **MySQL 8.0+**
+- **cacert.pem** SSL bundle — [download from curl.se](https://curl.se/ca/cacert.pem). Required for the Scryfall importer to make HTTPS requests on Windows.
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/sp-squared/mtg-manager.git
-   ```
+---
 
-2. **Copy the app folder into htdocs**
-   ```
-   Copy mtg-manager/ into C:\Apache24\htdocs\
-   ```
-   The app will be at `http://localhost/mtg-manager/`
+### Directory Layout
 
-3. **Create your database config**
-   ```
-   Copy: mtg-manager\includes\db_config.template.php
-     To: mtg-manager\includes\db_config.php
-   ```
-   Edit `db_config.php`:
-   ```php
-   define('APP_BASE', '/mtg-manager'); // must match your htdocs folder name
-   define('DB_HOST', 'localhost');
-   define('DB_USER', 'mtg_collection');
-   define('DB_PASS', 'your_password');
-   define('DB_NAME', 'mtg_database');
-   ```
+```text
+C:\
+├── Apache24\
+│   ├── bin\                ← httpd.exe lives here
+│   ├── conf\               ← httpd.conf, PHP module config
+│   └── htdocs\
+│       └── mtg-manager\   ← repo clone goes here
+├── php\                    ← PHP installation
+└── secure-config\          ← outside web root — secrets only, never served by Apache
+    ├── cacert.pem          ← SSL certificate bundle (filename includes bundle date, e.g. cacert-2025-12-02.pem)
+    └── db_config.php       ← database credentials + paths
+```
 
-4. **Run the schema**
-   ```bash
-   mysql -u root -p < database/mtg_schema.sql
-   ```
+> **Why `secure-config` outside htdocs?** Placing credentials outside the web root means a misconfigured Apache that accidentally serves `.php` source cannot expose your database password.
 
-5. **Enable the MySQL event scheduler** (for Card of the Day midnight gap-fill). Add to `my.ini`:
-   ```ini
-   [mysqld]
-   event_scheduler=ON
-   ```
-   Then restart MySQL:
-   ```
-   net stop MySQL80 && net start MySQL80
-   ```
+---
 
-6. **Register your account** — the first registered user (ID 1) becomes admin automatically.
+### 1. Install Apache
 
-7. **Import card data** — go to `admin/import_scryfall.php`. The importer streams Scryfall bulk data and can be re-run safely.
+Download the **Apache 2.4 Win64** zip from [apachelounge.com/download](https://www.apachelounge.com/download/) and extract to `C:\Apache24`.
 
-8. **Load prices** — go to `admin/update_prices.php` and click **Start Price Update**. Run regularly (daily or weekly) to build price trend data. Price tables are created automatically on first run.
+**Start Apache in the foreground** (useful for seeing log output during setup):
+
+```powershell
+cd C:\Apache24\bin
+.\httpd.exe
+```
+
+**Install and start as a Windows service** (recommended for normal use):
+
+```powershell
+cd C:\Apache24\bin
+.\httpd.exe -k install
+.\httpd.exe -k start
+```
+
+Stop / restart the service:
+
+```powershell
+.\httpd.exe -k stop
+.\httpd.exe -k restart
+```
+
+---
+
+### 2. Install PHP
+
+Extract PHP to `C:\php`. Enable the required extensions in `C:\php\php.ini`:
+
+```ini
+extension=mysqli
+extension=pdo_mysql
+```
+
+Wire PHP into Apache by adding to `C:\Apache24\conf\httpd.conf`:
+
+```apache
+LoadModule php_module "C:/php/php8apache2_4.dll"
+AddHandler application/x-httpd-php .php
+PHPIniDir "C:/php"
+```
+
+---
+
+### 3. Create the secure-config folder
+
+Create `C:\secure-config\` and place two files there:
+
+**`cacert.pem`** — download the bundle from [curl.se/ca/cacert.pem](https://curl.se/ca/cacert.pem). The filename will include the bundle date (e.g. `cacert-2025-12-02.pem`); rename it to `cacert.pem` or keep the dated name and update the path below accordingly.
+
+Tell `php.ini` where it lives so PHP curl uses it globally:
+
+```ini
+curl.cainfo = "C:/secure-config/cacert.pem"
+```
+
+**`db_config.php`** — copy from `includes\db_config.template.php`, move it to `C:\secure-config\`, and fill in your credentials:
+
+```php
+<?php
+define('DB_HOST', 'localhost');
+define('DB_USER', 'mtg_collection');
+define('DB_PASS', 'your_password_here');
+define('DB_NAME', 'mtg_database');
+define('APP_BASE', '/mtg-manager');
+define('CACERT_PATH', 'C:/secure-config/cacert.pem');
+```
+
+Then update `includes\connect.php` to require the file from its new location:
+
+```php
+require_once 'C:/secure-config/db_config.php';
+```
+
+---
+
+### 4. Clone the repo into htdocs
+
+```powershell
+cd C:\Apache24\htdocs
+git clone https://github.com/sp-squared/mtg-manager.git mtg-manager
+```
+
+The app will be available at `http://localhost/mtg-manager/`.
+
+---
+
+### 5. Run the database schema
+
+```powershell
+mysql -u root -p < C:\Apache24\htdocs\mtg-manager\database\mtg_schema.sql
+```
+
+This creates the `mtg_database` database, the `mtg_collection` user, all tables, and the migration procedures. The schema is idempotent — safe to re-run.
+
+---
+
+### 6. Enable the MySQL event scheduler
+
+Required for the Card of the Day midnight gap-fill. Add to `my.ini`:
+
+```ini
+[mysqld]
+event_scheduler=ON
+```
+
+Restart MySQL:
+
+```powershell
+net stop MySQL80
+net start MySQL80
+```
+
+---
+
+### 7. First run
+
+1. Visit `http://localhost/mtg-manager/` and register an account — the first registered user (ID 1) is automatically admin.
+2. Go to **Admin → Import Scryfall Data** to stream and import the full card database (~250 MB, several minutes).
+3. Go to **Admin → Update Prices** to seed current price data. Run regularly (daily or weekly) to build price history.
+
+---
 
 ### Configuration Notes
 
-**`APP_BASE`** must match the subfolder name you used in htdocs:
+**`APP_BASE`** must match the subfolder name used in htdocs:
 
-| Setup | Value |
-|---|---|
+| htdocs layout | `APP_BASE` value |
+| --- | --- |
 | `htdocs/mtg-manager/` | `'/mtg-manager'` |
 | `htdocs/cards/` | `'/cards'` |
-| Apache root pointing directly at the folder | `''` |
+| Apache root pointing directly at the app folder | `''` |
 
-**SSL on Windows** — if the Scryfall importer cannot reach the API, add to `php.ini`:
-```ini
-curl.cainfo = "C:/path/to/cacert.pem"
-```
+**SSL troubleshooting** — if the Scryfall importer reports a certificate error, verify `curl.cainfo` in `php.ini` points to your `cacert.pem` and that the file exists at that exact path. The importer also checks several fallback paths automatically (see `resolveCacert()` in `admin/import_scryfall.php`).
 
 **Password policy** — minimum 8 characters, maximum 32. The 32-character cap ensures passwords always fall within bcrypt's 72-byte processing limit, even with multibyte characters.
 
