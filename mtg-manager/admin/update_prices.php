@@ -279,7 +279,8 @@ $dbc->query("SET autocommit = 0");
 
 $upsert_stmt = $dbc->prepare("
     INSERT INTO card_prices (card_id, price_usd, price_usd_foil, price_eur, price_eur_foil, price_tix, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, NOW())
+    SELECT ?, ?, ?, ?, ?, ?, NOW()
+    WHERE EXISTS (SELECT 1 FROM cards WHERE id = ?)
     ON DUPLICATE KEY UPDATE
         price_usd      = VALUES(price_usd),
         price_usd_foil = VALUES(price_usd_foil),
@@ -291,7 +292,8 @@ $upsert_stmt = $dbc->prepare("
 
 $history_stmt = $dbc->prepare("
     INSERT INTO card_price_history (card_id, price_usd, price_usd_foil, price_eur, price_eur_foil, price_tix, recorded_date)
-    VALUES (?, ?, ?, ?, ?, ?, CURDATE())
+    SELECT ?, ?, ?, ?, ?, ?, CURDATE()
+    WHERE EXISTS (SELECT 1 FROM cards WHERE id = ?)
     ON DUPLICATE KEY UPDATE
         price_usd      = VALUES(price_usd),
         price_usd_foil = VALUES(price_usd_foil),
@@ -331,11 +333,12 @@ while ($card = $parser->getNext()) {
 
     $card_id = $card['id'];
 
-    $upsert_stmt->bind_param("sddddd", $card_id, $usd, $usd_foil, $eur, $eur_foil, $tix);
+    $upsert_stmt->bind_param("sddddds", $card_id, $usd, $usd_foil, $eur, $eur_foil, $tix, $card_id);
     if (!$upsert_stmt->execute()) { $errors++; continue; }
+    if ($upsert_stmt->affected_rows === 0) continue; // card not in local DB — silently skip
 
-    $history_stmt->bind_param("sddddd", $card_id, $usd, $usd_foil, $eur, $eur_foil, $tix);
-    $history_stmt->execute(); // ignore duplicate errors — ON DUPLICATE KEY handles them
+    $history_stmt->bind_param("sddddds", $card_id, $usd, $usd_foil, $eur, $eur_foil, $tix, $card_id);
+    $history_stmt->execute();
 
     $updated++;
 
